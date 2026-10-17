@@ -4,74 +4,98 @@
     {
       "case": "clean_20m_confirmed",
       "synthetic": true,
-      "read_only": true,
+      "read_only": false,
       "storage_error": null,
       "session": {
-        "schema_version": 1,
+        "schema_version": 2,
         "session_id": "253c953535cd84a69749f5ce",
         "start_ts": 0,
         "end_ts": 1201,
         "active_seconds": 1200.0,
         "quality": "complete",
         "flags": [],
-        "intent_confirmed": true
-      }
+        "intent_confirmed": true,
+        "finish_reason": "observed_inactivity"
+      },
+      "telemetry_observed": true,
+      "automatic_control": false,
+      "control_scope": [
+        "finish_workout"
+      ]
     },
     {
       "case": "duplicate_replay_same_id",
       "synthetic": true,
-      "read_only": true,
+      "read_only": false,
       "storage_error": null,
       "session": {
-        "schema_version": 1,
+        "schema_version": 2,
         "session_id": "253c953535cd84a69749f5ce",
         "start_ts": 0,
         "end_ts": 1201,
         "active_seconds": 1200.0,
         "quality": "complete",
         "flags": [],
-        "intent_confirmed": true
-      }
+        "intent_confirmed": true,
+        "finish_reason": "observed_inactivity"
+      },
+      "telemetry_observed": true,
+      "automatic_control": false,
+      "control_scope": [
+        "finish_workout"
+      ]
     },
     {
       "case": "sub_threshold_599s",
       "synthetic": true,
-      "read_only": true,
+      "read_only": false,
       "storage_error": null,
       "session": {
-        "schema_version": 1,
+        "schema_version": 2,
         "session_id": "1a74889820785c757327e570",
         "start_ts": 20000,
         "end_ts": 20600,
         "active_seconds": 599.0,
         "quality": "complete",
         "flags": [],
-        "intent_confirmed": true
-      }
+        "intent_confirmed": true,
+        "finish_reason": "observed_inactivity"
+      },
+      "telemetry_observed": true,
+      "automatic_control": false,
+      "control_scope": [
+        "finish_workout"
+      ]
     },
     {
       "case": "clean_but_intent_unconfirmed",
       "synthetic": true,
-      "read_only": true,
+      "read_only": false,
       "storage_error": null,
       "session": {
-        "schema_version": 1,
+        "schema_version": 2,
         "session_id": "381656a81c4c4d736f92eaa2",
         "start_ts": 30000,
         "end_ts": 30601,
         "active_seconds": 600.0,
         "quality": "complete",
         "flags": [],
-        "intent_confirmed": false
-      }
+        "intent_confirmed": false,
+        "finish_reason": "observed_inactivity"
+      },
+      "telemetry_observed": true,
+      "automatic_control": false,
+      "control_scope": [
+        "finish_workout"
+      ]
     },
     {
       "case": "midride_reconnect_requires_review",
       "synthetic": true,
-      "read_only": true,
+      "read_only": false,
       "storage_error": null,
       "session": {
-        "schema_version": 1,
+        "schema_version": 2,
         "session_id": "ccf6aadcaafae341ca28eccc",
         "start_ts": 40000,
         "end_ts": 40601,
@@ -80,16 +104,22 @@
         "flags": [
           "disconnect"
         ],
-        "intent_confirmed": true
-      }
+        "intent_confirmed": true,
+        "finish_reason": "observed_inactivity"
+      },
+      "telemetry_observed": true,
+      "automatic_control": false,
+      "control_scope": [
+        "finish_workout"
+      ]
     },
     {
       "case": "ha_restart_requires_review",
       "synthetic": true,
-      "read_only": true,
+      "read_only": false,
       "storage_error": null,
       "session": {
-        "schema_version": 1,
+        "schema_version": 2,
         "session_id": "41be10ca3f1823d77b721643",
         "start_ts": 50000,
         "end_ts": 50601,
@@ -98,24 +128,37 @@
         "flags": [
           "restart"
         ],
-        "intent_confirmed": true
-      }
+        "intent_confirmed": true,
+        "finish_reason": "observed_inactivity"
+      },
+      "telemetry_observed": true,
+      "automatic_control": false,
+      "control_scope": [
+        "finish_workout"
+      ]
     },
     {
       "case": "long_pause_ends_subthreshold_session",
       "synthetic": true,
-      "read_only": true,
+      "read_only": false,
       "storage_error": null,
       "session": {
-        "schema_version": 1,
+        "schema_version": 2,
         "session_id": "21cdbb1016629eecfc8f91f3",
         "start_ts": 60000,
         "end_ts": 60301,
         "active_seconds": 300.0,
         "quality": "complete",
         "flags": [],
-        "intent_confirmed": true
-      }
+        "intent_confirmed": true,
+        "finish_reason": "observed_inactivity"
+      },
+      "telemetry_observed": true,
+      "automatic_control": false,
+      "control_scope": [
+        "finish_workout"
+      ]
     }
-  ]
+  ],
+  "schema_version": 2
 }

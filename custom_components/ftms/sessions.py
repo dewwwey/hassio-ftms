@@ -14,9 +14,17 @@ class Sessions:
         self.previous = None
         self.completed_count = 0
         self.saw_idle = False
+        self.awaiting_idle_after_finish = False
 
     def apply(self, record):
         ts, kind = record["ts"], record["kind"]
+        if kind == "finish":
+            if self.current:
+                end = self.current.get("inactive_since", ts)
+                self._finish(end, None, record.get("reason", "explicit_finish"))
+            self.awaiting_idle_after_finish = True
+            self.saw_idle = False
+            return
         # Setup retries have no running watchdog. Expire before resumed samples
         # as well, so a new day's ride cannot merge into yesterday's outage.
         if (self.current and kind in ("sample", "restart", "tick")
@@ -41,6 +49,10 @@ class Sessions:
             self.previous = None
             return
         active = cadence > 0
+        if self.current is None and self.awaiting_idle_after_finish:
+            if active:
+                return
+            self.awaiting_idle_after_finish = False
         if not active and self.current is None:
             self.saw_idle = True
         if self.current and self.previous:
@@ -52,7 +64,7 @@ class Sessions:
         if self.current is None and active:
             identity = f"ftms:v1:{self.source}:{ts:.6f}"
             self.current = {
-                "schema_version": 1,
+                "schema_version": 2,
                 "session_id": hashlib.sha256(identity.encode()).hexdigest()[:24],
                 "source": "ha.ftms.indoor_bike",
                 "start_ts": ts, "last_activity": ts, "last_sample": ts,
@@ -94,7 +106,7 @@ class Sessions:
         if flag not in self.current["flags"]:
             self.current["flags"].append(flag)
 
-    def _finish(self, end_ts, flag):
+    def _finish(self, end_ts, flag, reason="observed_inactivity"):
         if flag:
             self._flag(flag)
         s = self.current.copy()
@@ -102,6 +114,7 @@ class Sessions:
         s["total_seconds"] = max(0, end_ts - s["start_ts"])
         s["active_seconds"] = round(s["active_seconds"], 3)
         s["quality"] = "partial" if s["flags"] else "complete"
+        s["finish_reason"] = flag or reason
         for key in ("distance_previous", "inactive_since"):
             s.pop(key, None)
         self.last = s

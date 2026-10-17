@@ -1,3 +1,11 @@
+finish_workout:
+  name: Finish workout
+  description: Ask the bike to stop the workout using FTMS, wait for confirmation, and finalize the observed session without disconnecting.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        text:
 get_sessions:
   name: Get recorded sessions
   description: Return private completed session observations from the local journal. Does not publish or credit rewards.

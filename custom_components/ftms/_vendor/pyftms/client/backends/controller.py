@@ -235,7 +235,11 @@ class MachineController:
     ) -> None:
         """Machine Status notification callback."""
         bio = io.BytesIO(data)
-        status = MachineStatusModel._deserialize(bio)
+        try:
+            status = MachineStatusModel._deserialize(bio)
+        except (ValueError, AssertionError, EOFError, TypeError, IndexError):
+            self._cb(UpdateEvent(event_id="update", event_data={"packet_error": 1}))
+            return
 
         # Handle loosing control
         if status.code == MachineStatusCode.LOST_CONTROL:

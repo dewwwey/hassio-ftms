@@ -1,4 +1,23 @@
-# Private Home Assistant FTMS interface, schema 1
+# Private Home Assistant FTMS interface, schema 2
+
+Normal use: leave FTMS enabled; wake the bike, ride, stop pedalling, and use HA's
+**Finish workout** button/action. The action sends the FTMS Stop procedure and
+waits for a positive bike acknowledgement. It does not disable the integration or
+disconnect deliberately. Inactivity remains a logical-record fallback; it does
+not silently send a device-control command. Bike sleep/power-off is ordinary
+unavailability, with automatic reconnection expected on wake-up.
+
+Acceptance warning for this development version: Request Control succeeds on the
+idle real bike, but Stop has timed out. A post-ride Finish and its console effect
+are still being tested. The desired normal flow above is not yet fully accepted.
+
+Schema 2 replaces the old integration-wide `read_only=true` claim: an explicitly
+invoked Finish action is now available, so `read_only=false`,
+`telemetry_observed=true`, `automatic_control=false`, and
+`control_scope=["finish_workout"]`. Consumers must not use read_only alone as a
+data-quality gate. Samples remain observed facts, and quality/intent/storage
+requirements still apply. No resistance, target-power, reset or start command is
+exposed. No agent is required to end a workout or manage the connection.
 
 All values stay in HA and its private configuration share. This document contains
 no health observations. Posting any resulting health data to NEXUS or another
@@ -17,14 +36,17 @@ Attributes:
 
 | Attribute | Meaning |
 | --- | --- |
-| schema_version | 1 |
+| schema_version | 2 |
 | last_received_ts | UTC Unix seconds of last actual realtime frame, or null |
 | observed_metrics | Names observed on this connection; not capability guarantees |
 | current_session | Active/pending session object, or null |
 | last_session | Most recent finalized observation, or null |
 | completed_count | Number of finalized records, including partial records |
 | storage_error | null on healthy storage; error/recovery indicator otherwise |
-| read_only | true |
+| read_only | false: explicit Finish is available |
+| telemetry_observed | true: values come from received measurements |
+| automatic_control | false |
+| control_scope | finish_workout only |
 
 Metric sensor attributes include `source=ftms_notification` and
 `last_received_ts`. Each metric is unavailable before observation, after ten
@@ -47,7 +69,15 @@ data:
 response_variable: rides
 ```
 
-Response: `schema_version`, `read_only`, `storage_error`, `total`, chronological
+Through the current MCP server, use `ha_call_write_tool(name="ha_call_service",
+arguments={"domain":"ftms", "service":"get_sessions", "data":{
+"config_entry_id":FTMS_CONFIG_ENTRY_ID}, "return_response":true})`.
+This HA action only reads data; MCP categorizes its generic service caller as a
+write tool. A client restricted to read tools needs a dedicated MCP wrapper from
+the MCP maintainer. `ftms.get_sessions` is not itself an MCP tool name.
+
+Response: `schema_version`, `read_only`, `telemetry_observed`, `automatic_control`,
+`control_scope`, `storage_error`, `total`, chronological
 `sessions`, `has_more`.
 Increment offset by the number returned while `has_more`. Consumers must upsert
 by `session_id`; never pay rewards merely because an entry appears in a response.
@@ -62,6 +92,24 @@ if samples are missing. No missing interval is interpolated.
 The ID hashes the persisted source and first activity timestamp. Replaying the
 same journal yields the same IDs and summaries. A new config entry is a new
 source; migrations must preserve source identity and journal together.
+
+The schema-2 replay adds a `finish_reason` field; source samples and stable IDs are
+preserved. Summary schema metadata can change across software versions, while
+repeated exports on one version remain identical.
+
+## Finish action
+
+Use the device's Finish workout button, or `ftms.finish_workout` with
+`config_entry_id`. Only a connected device is accepted. The procedure subscribes
+to control-point indications, sends Request Control (00), requires success, then
+sends Stop (08 01) and requires success. It times out or reports rejection rather
+than claiming success. It never uses disconnection as a finish mechanism.
+
+A received machine-stop notification or acknowledged Finish finalizes the current
+observation immediately. A stopped/paused ride ends at its first observed idle
+sample; no unseen time is credited. Duplicate finish events cannot duplicate the
+session. After finishing while moving, an idle sample is required before another
+ride can begin. General library control methods remain blocked.
 
 ## Session and reward semantics
 
@@ -92,6 +140,11 @@ logged. UTC timestamps and original available fields support private time-series
 inspection. The in-memory active record is recovered by replay after restart.
 An incomplete final write is preserved in `.truncated` before recovery. Interior
 corruption fails closed and leaves the file intact. Back up journals privately.
+
+While the coordinator is loaded, disconnect retains last-received metadata.
+After entry unload/setup retry, restored entities can expose only `restored=true`.
+Persistent offline last-seen metadata is not implemented; restored attributes
+must not be read as current observations.
 
 Current implementation replays the full journal when loading/exporting. Automatic
 retention, compaction, multi-user attribution, clock-jump reconciliation and

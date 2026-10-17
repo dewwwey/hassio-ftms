@@ -1,4 +1,4 @@
-"""Read-only FTMS integration; connection retries belong to Home Assistant."""
+"""Observed FTMS telemetry with an explicit, narrowly scoped Finish action."""
 import asyncio
 import json
 from pathlib import Path
@@ -14,7 +14,7 @@ from .coordinator import DataCoordinator
 from .models import FtmsData
 from .sessions import completed_sessions
 
-PLATFORMS = [Platform.SENSOR]
+PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
 type FtmsConfigEntry = ConfigEntry[FtmsData]
 
 
@@ -39,15 +39,27 @@ async def async_setup(hass, config):
         offset, limit = call.data["offset"], call.data["limit"]
         runtime = getattr(entry, "runtime_data", None)
         storage_error = runtime.coordinator.storage_error if runtime else "entry_not_loaded"
-        return {"schema_version": 1, "read_only": True, "storage_error": storage_error, "total": len(sessions),
+        return {"schema_version": 2, "read_only": False, "telemetry_observed": True,
+                "automatic_control": False, "control_scope": ["finish_workout"],
+                "storage_error": storage_error, "total": len(sessions),
                 "sessions": sessions[offset:offset + limit],
                 "has_more": offset + limit < len(sessions)}
+
+    async def finish(call):
+        entry = hass.config_entries.async_get_entry(call.data["config_entry_id"])
+        runtime = getattr(entry, "runtime_data", None) if entry else None
+        if entry is None or entry.domain != "ftms" or runtime is None or runtime.coordinator.closed:
+            raise ValueError("FTMS entry is not connected")
+        return await runtime.coordinator.async_finish_workout()
 
     hass.services.async_register("ftms", "get_sessions", get_sessions, schema=vol.Schema({
         vol.Required("config_entry_id"): str,
         vol.Optional("offset", default=0): vol.All(int, vol.Range(min=0)),
         vol.Optional("limit", default=50): vol.All(int, vol.Range(min=1, max=100)),
     }), supports_response=SupportsResponse.ONLY)
+    hass.services.async_register("ftms", "finish_workout", finish, schema=vol.Schema({
+        vol.Required("config_entry_id"): str,
+    }), supports_response=SupportsResponse.OPTIONAL)
     return True
 
 

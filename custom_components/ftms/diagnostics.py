@@ -3,7 +3,10 @@ async def async_get_config_entry_diagnostics(hass, entry):
     data = entry.runtime_data
     c = data.coordinator
     return {
-        "read_only": True,
+        "read_only": False,
+        "telemetry_observed": True,
+        "automatic_control": False,
+        "control_scope": ["finish_workout"],
         "connected": data.ftms.is_connected,
         "fresh": c.fresh,
         "observed_metric_names": sorted(c.observed),

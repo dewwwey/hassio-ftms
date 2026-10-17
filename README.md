@@ -1,10 +1,12 @@
 # Fitness Machine Service
 
-This local branch is **read-only** and targets the Kettler HOI Ride+ investigation.
+This local branch records observed Kettler HOI Ride+ telemetry and exposes one
+explicit **Finish workout** action. FTMS stays enabled between workouts.
 See [PATCHES.md](PATCHES.md) for source provenance and rollback,
 [BASIL_INTERFACE.md](BASIL_INTERFACE.md) for the private telemetry/session API,
 and [ACCEPTANCE.md](ACCEPTANCE.md) for verified versus untested behavior.
-Controls are disabled. This branch is installed manually and is not an upstream
+General controls are disabled; Finish only requests control and sends FTMS Stop.
+This branch is installed manually and is not an upstream
 release or a published HACS repository.
 
 [Home Assistant](https://www.home-assistant.io/) [HACS](https://hacs.xyz/) custom component for working with fitness equipment with a Bluetooth interface.
@@ -15,7 +17,7 @@ Component capabilities:
 
 1. Automatically detect Bluetooth fitness devices nearby, notifying the user about it;
 2. Setup Wizard, which allows you to easily configure the device by determining its type and set of sensors in automatic or manual modes. The set of sensors can be changed.
-3. Collects training data from fitness equipment; this branch disables parameter controls.
+3. Collects training data and provides an acknowledged Finish action; parameter controls remain disabled.
 
 Supported fitness machines:
 

@@ -13,10 +13,14 @@ ROOT = Path(__file__).parents[1] / "custom_components" / "ftms"
 
 
 def load_coordinator():
-    for name in ("homeassistant", "homeassistant.core", "homeassistant.helpers",
+    for name in ("homeassistant", "homeassistant.core", "homeassistant.helpers", "homeassistant.exceptions",
                  "homeassistant.helpers.event", "homeassistant.helpers.update_coordinator"):
         sys.modules.setdefault(name, ModuleType(name))
-    sys.modules["homeassistant.core"].callback = lambda f: f
+    def callback(fn):
+        fn._hass_callback = True
+        return fn
+    sys.modules["homeassistant.core"].callback = callback
+    sys.modules["homeassistant.exceptions"].HomeAssistantError = type("HomeAssistantError", (Exception,), {})
     sys.modules["homeassistant.helpers.event"].async_track_time_interval = lambda *args: lambda: None
     sys.modules["homeassistant.helpers.event"].async_call_later = lambda *args: lambda: None
 
@@ -139,6 +143,8 @@ class JournalTests(unittest.IsolatedAsyncioTestCase):
             delays = []
             entry = SimpleNamespace(entry_id="synthetic")
             def later(hass, delay, callback):
+                # HA dispatches unmarked sync functions to an executor thread.
+                self.assertTrue(getattr(callback, "_hass_callback", False))
                 delays.append(delay)
                 return lambda: None
             with patch("journal_test_package.coordinator.async_call_later", later):
@@ -150,3 +156,41 @@ class JournalTests(unittest.IsolatedAsyncioTestCase):
                     state.request_reconnect(entry)
             self.assertEqual(delays[:4], [5, 10, 20, 40])
             self.assertEqual(max(delays), 300)
+
+    async def test_reconnect_timer_reloads_on_loop_and_ignores_closed_coordinator(self):
+        with tempfile.TemporaryDirectory() as path:
+            state = self.make(path)
+            scheduled = []
+            calls = []
+            state.hass.config_entries = SimpleNamespace(async_schedule_reload=calls.append)
+            def later(hass, delay, callback):
+                self.assertTrue(getattr(callback, "_hass_callback", False))
+                scheduled.append(callback)
+                return lambda: None
+            with patch("journal_test_package.coordinator.async_call_later", later):
+                state.request_reconnect(SimpleNamespace(entry_id="synthetic"))
+                scheduled[-1](None)
+                self.assertEqual(calls, ["synthetic"])
+                self.assertIsNone(state.cancel_reload)
+                state.reloading = False
+                state.request_reconnect(SimpleNamespace(entry_id="synthetic"))
+                state.closed = True
+                scheduled[-1](None)
+                self.assertEqual(calls, ["synthetic"])
+
+    async def test_idle_after_explicit_finish_rearms_next_ride_and_is_persisted(self):
+        with tempfile.TemporaryDirectory() as path:
+            state = self.make(path)
+            await state.open_journal()
+            def send(cadence):
+                state.ftms.callback(SimpleNamespace(event_id="update", event_data={"speed_instant": 0, "cadence_instant": cadence}))
+            send(0)
+            self.assertTrue(state.idle_recorded)
+            state.ftms.callback(SimpleNamespace(event_id="stop"))
+            self.assertTrue(state.sessions.awaiting_idle_after_finish)
+            send(0)
+            self.assertFalse(state.sessions.awaiting_idle_after_finish)
+            send(60)
+            self.assertIsNotNone(state.sessions.current)
+            self.assertEqual(state.sessions.current["flags"], [])
+            await state.close()

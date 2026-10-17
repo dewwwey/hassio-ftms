@@ -354,13 +354,16 @@ class FtmsStatus(FtmsEntity, SensorEntity):
     def extra_state_attributes(self):
         c = self.coordinator
         return {
-            "schema_version": 1, "last_received_ts": c.last_received,
+            "schema_version": 2, "last_received_ts": c.last_received,
             "observed_metrics": sorted(c.observed),
             "current_session": c.sessions.current,
             "last_session": c.sessions.last,
             "completed_count": c.sessions.completed_count,
             "storage_error": c.storage_error,
-            "read_only": True,
+            "read_only": False,
+            "telemetry_observed": True,
+            "automatic_control": False,
+            "control_scope": ["finish_workout"],
         }
 
     @callback

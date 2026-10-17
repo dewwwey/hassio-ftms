@@ -287,7 +287,10 @@ class FitnessMachine(ABC, PropertiesManager):
                 self._settings_ranges,
             ) = await read_features(self._cli, self._machine_type)
 
-        # Read-only deployment: no control-point subscription or commands.
+        # Observe machine status without requesting control or subscribing to
+        # control-point indications. Finish subscribes to those only on demand.
+        if characteristic := self._cli.services.get_characteristic(c.STATUS_UUID):
+            await self._cli.start_notify(characteristic, self._controller._on_machine_status)
         await self._updater.subscribe(self._cli, self._data_uuid)
 
     # COMMANDS
@@ -308,7 +311,7 @@ class FitnessMachine(ABC, PropertiesManager):
         self._updater = DataUpdater(self._data_model, self._on_event)
 
     async def _write_command(self, *args, **kwargs):
-        raise PermissionError("FTMS control is disabled in this read-only deployment")
+        raise PermissionError("General FTMS controls are disabled; use the explicit Finish action")
 
     async def reset(self) -> ResultCode:
         """Initiates the procedure to reset the controllable settings of a fitness machine."""

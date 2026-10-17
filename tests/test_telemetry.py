@@ -183,6 +183,34 @@ class SessionTests(unittest.TestCase):
         self.assertIn("offline_timeout", state.last["flags"])
         self.assertNotEqual(state.current["session_id"], identity)
 
+    def test_acknowledged_finish_finalizes_paused_session_without_idle_timeout(self):
+        state = self.run_records([sample(-1, 0), sample(0), sample(5), sample(6, 0)])
+        identity = state.current["session_id"]
+        state.apply({"kind": "finish", "ts": 7, "reason": "ha_finish_acknowledged"})
+        self.assertIsNone(state.current)
+        self.assertEqual(state.last["session_id"], identity)
+        self.assertEqual(state.last["end_ts"], 6)
+        self.assertEqual(state.last["active_seconds"], 5)
+        self.assertEqual(state.last["quality"], "complete")
+        self.assertEqual(state.last["finish_reason"], "ha_finish_acknowledged")
+
+    def test_finish_while_moving_requires_idle_before_new_session(self):
+        state = self.run_records([sample(-1, 0), sample(0), sample(5)])
+        state.apply({"kind": "finish", "ts": 6, "reason": "machine_stop"})
+        state.apply(sample(7))
+        self.assertIsNone(state.current)
+        state.apply(sample(8, 0))
+        state.apply(sample(9))
+        self.assertIsNotNone(state.current)
+        self.assertEqual(state.current["flags"], [])
+
+    def test_duplicate_finish_event_does_not_duplicate_completed_ride(self):
+        records = [sample(-1, 0), sample(0), sample(5), sample(6, 0),
+                   {"kind": "finish", "ts": 7}, {"kind": "finish", "ts": 8}]
+        state = self.run_records(records)
+        self.assertEqual(state.completed_count, 1)
+        self.assertEqual(len(sessions.completed_sessions(records, "synthetic-device")), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

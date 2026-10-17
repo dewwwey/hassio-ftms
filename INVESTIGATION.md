@@ -51,26 +51,58 @@ speed, speed_average, cadence, cadence_average, distance_total, resistance_level
 power, power_average, energy_total, energy_per_hour, energy_per_minute, heart_rate,
 metabolic_equivalent, time_elapsed, telemetry_status.
 
-Creation/feature support does not prove a usable metric. No positive workout
-values, calories, MET or pulse are validated yet. Unsent energy-rate metrics stay
-unavailable. HR needs an actual source. See the private interface document for
-freshness/absence rules. No controls are registered.
+Creation/feature support does not prove a usable metric. Moving-bike cadence,
+power, speed, distance and time have now been observed. Calorie/MET accuracy and
+an actual pulse source remain unvalidated. Unsent energy-rate metrics stay
+unavailable. See the private interface document for freshness/absence rules.
+Version 0.24.8 adds a scoped explicit Finish button; general controls stay absent.
 
-## Remaining live work
+## Subsequent live acceptance
 
-The administrator was asked to perform a short ride and leave the console awake
-for two minutes afterward. A completed real ride, final session summary, full
-time-series comparison, and interruption/recovery acceptance are still pending.
-Local tests and an idle BLE connection cannot substitute for those observations.
+The administrator rode while dev3 was connected. The integration received changing
+cadence, speed, power, distance and elapsed time. Reloading only the FTMS entry
+during riding automatically reconnected, preserved the session ID, excluded the
+unknown interval and flagged the interruption. That deliberately partial record
+then finalized correctly after observed inactivity. Repeated exports were identical.
 
-The next checks are final-version startup, a real recorded ride, duplicate export,
-entry reload, USB scanner disable/enable, and HA restart replay. Bike power cycling,
-phone contention, multi-user identity, long-term durability and radio stability
-remain explicit untested cases until exercised.
+A separate start/stop ride was observed from its beginning and finalized as
+complete, with no flags. Independent calculation from the private journal matched
+the summary's start/end, active/total time and observed distance. Neither summary
+contains monetary fields or inferred intent. Actual measurements and IDs are
+excluded from this report and repository.
 
-Final dev3 checkpoint: HA has returned healthy after restart. The ASUS scanner is
-active. The bike is not in current discovery, so the FTMS entry correctly reports
-`Waiting for connectable FTMS advertisement` without attempting stale connections.
-The fact-only `ftms.get_sessions` API works and reports `entry_not_loaded` rather
-than presenting unavailable live data as healthy. A real recorded ride and live
-reconnection after wake-up are still pending administrator participation.
+The administrator confirmed immediate connection after one complete power cycle.
+After a later HA restart, the awake bike disappeared from current discovery on
+both the ASUS and temporarily enabled Pi scanners, while an independent Windows
+scan received its FTMS advertisements. Reloading ASUS scanning did not immediately
+recover it. It later connected through the Pi; the administrator had also moved
+its supply to a smart plug, so this is not counted as unattended recovery.
+
+The host kernel reports a missing BCM20702A1 firmware patch for the ASUS dongle.
+HA documentation identifies this Broadcom firmware limitation on HAOS. This is
+a diagnostic finding, not proof of the cause; an extension cable is already in
+use. Both scanners were temporarily retained to compare discovery.
+
+The first authorized smart-plug cycle exposed a distinct software bug in this
+branch: an unmarked synchronous reconnect timer ran in an executor thread, and
+HA rejected its event-loop-only reload call. The entry remained loaded but
+disconnected after discovery returned. Dev2 marks the timer as `@callback`, clears
+its handle and checks shutdown state. A regression verifies this dispatch
+contract. Three subsequent controlled power cycles recovered automatically,
+including ASUS-only scanning and a longer powered-off interval. FTMS stayed
+enabled; no agent-triggered integration/scanner reload was needed during these
+cycles. Completed records replayed after HA restart without phantom sessions.
+The Pi scanner was restored to disabled. Intermittent discovery loss and
+long-term sleep/wake reliability remain open.
+
+The console's hold-play/pause finish action fails in FTMS mode. A diagnostic
+disconnect made it exit to the start screen; this is unsuitable for normal use.
+FTMS stays enabled. Version 0.24.8 introduces Request Control then Stop only on an
+explicit Finish action. On the idle real device, Request Control was acknowledged
+but Stop was not acknowledged before timeout. No success or final session was
+fabricated. Dev2 reports the failing opcode in timeout errors. A post-ride test
+and physical console confirmation remain required.
+
+Other open checks include repeated sleep/wake and radio-loss recovery, paused
+ride resumption, phone contention, persistent offline last-seen metadata,
+multi-user identity and long-term durability. See ACCEPTANCE.md for exact status.

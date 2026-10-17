@@ -1,4 +1,4 @@
-# Read-only FTMS compatibility branch
+# FTMS compatibility branch with explicit Finish
 
 Local implementation owner: `homeassistant-dev`, NEXUS discussion 5.
 Branch: `homeassistant-dev/ftms-readonly`.
@@ -20,10 +20,15 @@ Branch: `homeassistant-dev/ftms-readonly`.
 
 ## Changes
 
-- Sensor platform only. Button, switch and number platforms removed; all
-  library command calls raise PermissionError. No request-control, resistance,
-  start/stop/reset or other application control writes. BLE notification
-  subscription still writes the standard CCCD, as required by BLE.
+- Sensor platform and a single Finish workout button. Number and switch controls
+  stay absent, and general library commands raise PermissionError. Explicit Finish
+  uses an isolated Request Control (00), then Stop (08 01), requiring matched
+  successful indications for both. No automatic application control, resistance,
+  start, pause or reset writes. BLE subscriptions also use standard CCCD writes.
+- Machine status is observed through notifications. A reported stop or successful
+  Finish finalizes once; trailing positive samples cannot start a phantom ride
+  before idle is observed. Two minutes of observed inactivity remain a recording
+  fallback, without sending a device command.
 - Use HA's shared scanner and connectable BLE device, refreshed via advertisement
   callbacks; BleakClientWithServiceCache; two connector attempts, 40-second setup
   timeout, HA-managed retry/backoff on setup failure. No reset of the shared adapter
@@ -31,6 +36,9 @@ Branch: `homeassistant-dev/ftms-readonly`.
 - Require current scanner discovery rather than a historical advertisement.
   Repeated post-connection failures back off 5, 10, 20, ... up to 300 seconds;
   one minute of continuously received telemetry resets that failure counter.
+- The reconnect timer must be marked as a HA callback. An unmarked synchronous
+  function is dispatched to an executor and HA rejects its async reload call.
+  Version 0.24.8.dev2 repairs the observed failure and tests this dispatch contract.
 - Full realtime frames are delivered, including repeated and all-zero frames.
   Removed upstream set-difference logic that could reference missing fields.
   Malformed packets clear the assembly and produce a quality event.
@@ -45,15 +53,19 @@ Branch: `homeassistant-dev/ftms-readonly`.
 - Simplified config flow compatible with current HA, with duplicate entry checks.
 - Verify the FTMS realtime GATT characteristic and choose its decoder rather than
   trusting advertised machine type; fail closed on ambiguity. A captured bike
-  advertisement reports treadmill. The bike's actual GATT type is still to be
-  verified in live acceptance.
+  advertisement reports treadmill. Live GATT verified Indoor Bike.
+- Schema 2 distinguishes observed telemetry from explicitly invoked device control;
+  consumers receive exact seconds, stable IDs and quality facts without amounts
+  or eligibility decisions. See BASIL_INTERFACE.md.
 
 ## Installation and rollback
 
 Copy `custom_components/ftms` to `/config/custom_components/ftms`, run HA's config
 check, restart HA, enable its Bluetooth adapter and select active scanning, then
 add the FTMS integration. Select the actual bike. Keep other fitness clients
-disconnected during initial tests. Do not enable control platforms from upstream.
+disconnected during initial tests. Do not enable general control platforms from
+upstream. Leave this integration enabled during normal use, including between
+rides; disconnection is not a Finish procedure.
 
 This is a manually installed local branch. HACS must not overwrite it. No other
 integration or Python installation was replaced.

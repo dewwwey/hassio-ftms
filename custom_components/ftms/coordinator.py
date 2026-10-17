@@ -11,6 +11,8 @@ from homeassistant.core import callback
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from .sessions import Sessions
+from .finish import finish_workout
+from homeassistant.exceptions import HomeAssistantError
 
 _LOGGER = logging.getLogger(__name__)
 FRESH_SECONDS = 10
@@ -37,10 +39,17 @@ class DataCoordinator(DataUpdateCoordinator):
         self.pending_storage_gap = False
         self.cancel_reload = None
         self.stable_since = None
+        self.finish_lock = asyncio.Lock()
 
         @callback
         def event(e):
-            if self.closed or e.event_id != "update":
+            if self.closed:
+                return
+            if e.event_id == "stop":
+                self.record({"kind": "finish", "ts": time(), "reason": "machine_stop"})
+                self.async_update_listeners()
+                return
+            if e.event_id != "update":
                 return
             if "packet_error" in e.event_data:
                 self.record({"kind": "malformed_packet", "ts": time()})
@@ -63,11 +72,33 @@ class DataCoordinator(DataUpdateCoordinator):
             self.values.update(metrics)
             self.observed.update(metrics)
             self.field_times.update({k: now for k in metrics})
-            if self.sessions.current or metrics.get("cadence_instant", 0) > 0 or not self.idle_recorded:
+            if (self.sessions.current or metrics.get("cadence_instant", 0) > 0
+                    or not self.idle_recorded or self.sessions.awaiting_idle_after_finish):
                 self.record({"kind": "sample", "ts": now, "metrics": metrics})
                 self.idle_recorded = metrics.get("cadence_instant") == 0
             self.async_set_updated_data(e)
         ftms.set_callback(event)
+
+    async def async_finish_workout(self):
+        requested = self.sessions.current["session_id"] if self.sessions.current else None
+        async with self.finish_lock:
+            if self.closed or not self.ftms.is_connected:
+                raise HomeAssistantError("Bike is not connected")
+            current = self.sessions.current["session_id"] if self.sessions.current else None
+            if current != requested:
+                raise HomeAssistantError("Workout changed while the finish request was waiting; try again")
+            try:
+                # No reconnect, reset, resistance or other application writes here.
+                await finish_workout(self.ftms._cli)
+            except Exception as exc:
+                self.record({"kind": "command_result", "ts": time(), "command": "finish_workout",
+                             "success": False, "error_type": type(exc).__name__})
+                raise HomeAssistantError(f"Bike did not confirm Finish workout: {exc}") from exc
+            self.record({"kind": "finish", "ts": time(), "reason": "ha_finish_acknowledged"})
+            self.async_update_listeners()
+            await self.queue.join()
+            return {"success": True, "connected": self.ftms.is_connected,
+                    "session_id": requested, "command": "finish_workout"}
 
     def _replay(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -150,10 +181,14 @@ class DataCoordinator(DataUpdateCoordinator):
         failures = counts.get(self.source, 0)
         counts[self.source] = failures + 1
         delay = min(300, 5 * 2 ** min(failures, 6))
-        self.cancel_reload = async_call_later(
-            self.hass, delay,
-            lambda now: self.hass.config_entries.async_schedule_reload(entry.entry_id),
-        )
+
+        @callback
+        def reload_entry(now):
+            self.cancel_reload = None
+            if not self.closed:
+                self.hass.config_entries.async_schedule_reload(entry.entry_id)
+
+        self.cancel_reload = async_call_later(self.hass, delay, reload_entry)
 
     def start_watchdog(self, entry):
         started = time()

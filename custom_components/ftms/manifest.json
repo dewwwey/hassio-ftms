@@ -1,6 +1,6 @@
 {
   "domain": "ftms",
-  "name": "Fitness Machine Service (read-only)",
+  "name": "Fitness Machine Service",
   "bluetooth": [
     {
       "service_data_uuid": "00001826-0000-1000-8000-00805f9b34fb"
@@ -19,5 +19,5 @@
   "issue_tracker": "https://github.com/dudanov/hassio-ftms/issues",
   "loggers": [],
   "requirements": [],
-  "version": "0.24.7.dev3"
+  "version": "0.24.8.dev2"
 }
