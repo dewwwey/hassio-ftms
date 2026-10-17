@@ -51,8 +51,11 @@ implementation requirement, not an already functioning capability. Read the
 advertised ranges and test acknowledged writes with the real bike before relying
 on them. Capability flags and prior upstream behavior alone are insufficient.
 
-Basil should select the exercise strategy and intended target; a deterministic
-local controller should enforce the approved policy. Agree and validate control
+Basil owns the exercise strategy, intended targets, and control algorithm. The
+coach may implement HA automations, PID control or another local controller;
+live coaching does not require a separate model tool call for every adjustment.
+This task prepares the technical prerequisites and tested control primitives,
+not the coach's training strategy or PID tuning. Agree and validate control
 mode (resistance or target power), starting load, absolute bounds, change rate,
 HR source/freshness, missing-HR and disconnect behavior, and a readily available
 manual override. Do not invent HR targets or enable unbounded agent writes.
