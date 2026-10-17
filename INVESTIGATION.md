@@ -67,3 +67,10 @@ The next checks are final-version startup, a real recorded ride, duplicate expor
 entry reload, USB scanner disable/enable, and HA restart replay. Bike power cycling,
 phone contention, multi-user identity, long-term durability and radio stability
 remain explicit untested cases until exercised.
+
+Final dev3 checkpoint: HA has returned healthy after restart. The ASUS scanner is
+active. The bike is not in current discovery, so the FTMS entry correctly reports
+`Waiting for connectable FTMS advertisement` without attempting stale connections.
+The fact-only `ftms.get_sessions` API works and reports `entry_not_loaded` rather
+than presenting unavailable live data as healthy. A real recorded ride and live
+reconnection after wake-up are still pending administrator participation.
