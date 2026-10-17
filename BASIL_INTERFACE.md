@@ -1,15 +1,20 @@
 # Private Home Assistant FTMS interface, schema 2
 
-Normal use: leave FTMS enabled; wake the bike, ride, stop pedalling, and use HA's
-**Finish workout** button/action. The action sends the FTMS Stop procedure and
+The revised desired workflow is specified in [USER_STORY.md](USER_STORY.md):
+reliable pre-ride connection, durable source telemetry, private coaching events,
+and eventually bounded automatic intensity control. Explicit Finish is optional.
+The current implementation described below does not yet provide all those features.
+
+Leave FTMS enabled. The optional **Finish workout** action sends the FTMS Stop procedure and
 waits for a positive bike acknowledgement. It does not disable the integration or
 disconnect deliberately. Inactivity remains a logical-record fallback; it does
 not silently send a device-control command. Bike sleep/power-off is ordinary
 unavailability, with automatic reconnection expected on wake-up.
 
 Acceptance warning for this development version: Request Control succeeds on the
-idle real bike, but Stop has timed out. A post-ride Finish and its console effect
-are still being tested. The desired normal flow above is not yet fully accepted.
+idle real bike, but Stop has timed out. Post-ride Finish and its console effect
+remain unverified and are no longer a first-release prerequisite. Ordinary
+standby wake has also failed to reconnect and is the higher-priority defect.
 
 Schema 2 replaces the old integration-wide `read_only=true` claim: an explicitly
 invoked Finish action is now available, so `read_only=false`,

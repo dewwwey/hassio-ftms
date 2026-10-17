@@ -3,6 +3,14 @@
 Status must be based on real results, with private observations kept out of
 public reports. Synthetic tests do not prove bike behavior.
 
+The administrator's revised priorities are in USER_STORY.md. Reliable capture and
+coaching access take priority over formal session boundaries and explicit Finish.
+The latest wake-by-pedalling test produced no new exercise samples in the private
+journal; cold power-cycle success does not close standby-wake acceptance.
+Private start notification, incremental raw-data access, verified chest-strap HR
+and approved bounded intensity control are new acceptance work, not implemented
+capabilities of version 0.24.8.dev2.
+
 ## Verified baseline (2026-10-17)
 
 - [x] HA Core 2026.10.1 / HAOS 18.3 / Pi 4 / Python 3.14.6; HACS 2.0.5.

@@ -1,7 +1,10 @@
 # Fitness Machine Service
 
 This local branch records observed Kettler HOI Ride+ telemetry and exposes one
-explicit **Finish workout** action. FTMS stays enabled between workouts.
+optional, experimental **Finish workout** action. FTMS stays enabled between workouts.
+See [USER_STORY.md](USER_STORY.md) for the revised connection-first coaching
+workflow and its unimplemented requirements, including private start events,
+incremental source-data access and bounded automatic intensity control.
 See [PATCHES.md](PATCHES.md) for source provenance and rollback,
 [BASIL_INTERFACE.md](BASIL_INTERFACE.md) for the private telemetry/session API,
 and [ACCEPTANCE.md](ACCEPTANCE.md) for verified versus untested behavior.
