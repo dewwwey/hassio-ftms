@@ -37,7 +37,9 @@ async def async_setup(hass, config):
 
         sessions = await hass.async_add_executor_job(read)
         offset, limit = call.data["offset"], call.data["limit"]
-        return {"schema_version": 1, "total": len(sessions),
+        runtime = getattr(entry, "runtime_data", None)
+        storage_error = runtime.coordinator.storage_error if runtime else "entry_not_loaded"
+        return {"schema_version": 1, "read_only": True, "storage_error": storage_error, "total": len(sessions),
                 "sessions": sessions[offset:offset + limit],
                 "has_more": offset + limit < len(sessions)}
 
@@ -53,7 +55,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: FtmsConfigEntry) -> bool
     address = entry.data[CONF_ADDRESS]
     info = bluetooth.async_last_service_info(hass, address, connectable=True)
     device = bluetooth.async_ble_device_from_address(hass, address, connectable=True)
-    if info is None or device is None:
+    if (info is None or device is None
+            or not bluetooth.async_scanner_devices_by_address(hass, address, connectable=True)):
         raise ConfigEntryNotReady("Waiting for connectable FTMS advertisement")
     ready = False
     coordinator = None
@@ -63,7 +66,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: FtmsConfigEntry) -> bool
         if coordinator:
             coordinator.disconnected()
         if ready and ftms.need_connect:
-            hass.config_entries.async_schedule_reload(entry.entry_id)
+            coordinator.request_reconnect(entry)
 
     try:
         ftms = pyftms.get_client(device, info.advertisement, on_disconnect=disconnected)

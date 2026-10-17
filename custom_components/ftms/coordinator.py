@@ -8,7 +8,7 @@ from pathlib import Path
 from time import time
 
 from homeassistant.core import callback
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from .sessions import Sessions
 
@@ -35,6 +35,8 @@ class DataCoordinator(DataUpdateCoordinator):
         self.reloading = False
         self.idle_recorded = False
         self.pending_storage_gap = False
+        self.cancel_reload = None
+        self.stable_since = None
 
         @callback
         def event(e):
@@ -44,10 +46,19 @@ class DataCoordinator(DataUpdateCoordinator):
                 self.record({"kind": "malformed_packet", "ts": time()})
                 return
             metrics = {k: v for k, v in e.event_data.items() if k != "rssi" and v is not None}
+            # A bike without an attached HR source commonly transmits zero.
+            if "heart_rate" in metrics and not 0 < metrics["heart_rate"] < 255:
+                metrics.pop("heart_rate")
+                self.field_times.pop("heart_rate", None)
+                self.values.pop("heart_rate", None)
             # Status notifications do not prove realtime measurements are fresh.
             if not any(k in metrics for k in ("speed_instant", "cadence_instant", "power_instant", "time_elapsed")):
                 return
             now = time()
+            if self.last_received is None or now - self.last_received > FRESH_SECONDS:
+                self.stable_since = now
+            if self.stable_since is not None and now - self.stable_since >= 60:
+                self.hass.data.setdefault("ftms_retry", {})[self.source] = 0
             self.last_received = now
             self.values.update(metrics)
             self.observed.update(metrics)
@@ -130,6 +141,20 @@ class DataCoordinator(DataUpdateCoordinator):
     def field_fresh(self, key):
         return self.fresh and time() - self.field_times.get(key, 0) <= FRESH_SECONDS
 
+    @callback
+    def request_reconnect(self, entry):
+        if self.closed or self.reloading:
+            return
+        self.reloading = True
+        counts = self.hass.data.setdefault("ftms_retry", {})
+        failures = counts.get(self.source, 0)
+        counts[self.source] = failures + 1
+        delay = min(300, 5 * 2 ** min(failures, 6))
+        self.cancel_reload = async_call_later(
+            self.hass, delay,
+            lambda now: self.hass.config_entries.async_schedule_reload(entry.entry_id),
+        )
+
     def start_watchdog(self, entry):
         started = time()
 
@@ -140,8 +165,8 @@ class DataCoordinator(DataUpdateCoordinator):
             self.async_update_listeners()
             age = time() - (self.last_received or started)
             if self.ftms.is_connected and age > 30 and not self.reloading:
-                self.reloading = True
-                self.hass.config_entries.async_schedule_reload(entry.entry_id)
+                self.request_reconnect(entry)
+                self.hass.async_create_task(self.ftms.disconnect())
         self.cancel_watchdog = async_track_time_interval(self.hass, tick, timedelta(seconds=5))
 
     async def close(self):
@@ -150,6 +175,8 @@ class DataCoordinator(DataUpdateCoordinator):
         self.closed = True
         if self.cancel_watchdog:
             self.cancel_watchdog()
+        if self.cancel_reload:
+            self.cancel_reload()
         self.ftms.set_callback(None)
         if self.worker:
             await self.queue.join()

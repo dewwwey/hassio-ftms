@@ -10,6 +10,8 @@ is an engineering discussion, not a telemetry transport.
 The integration creates a `Telemetry status` sensor. Discover its entity ID via
 the HA entity registry for platform `ftms`; never assume a particular generated
 slug. Its state is `disconnected`, `stale`, `idle`, `riding`, or `paused`.
+HA unloads entities during config-entry retry; in that case state is
+`unavailable` and consumers must not interpret restored attributes as live data.
 
 Attributes:
 
@@ -45,7 +47,8 @@ data:
 response_variable: rides
 ```
 
-Response: `schema_version`, `total`, chronological `sessions`, `has_more`.
+Response: `schema_version`, `read_only`, `storage_error`, `total`, chronological
+`sessions`, `has_more`.
 Increment offset by the number returned while `has_more`. Consumers must upsert
 by `session_id`; never pay rewards merely because an entry appears in a response.
 No agent credentials or new external HA client are provisioned by this patch.

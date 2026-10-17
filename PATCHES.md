@@ -28,6 +28,9 @@ Branch: `homeassistant-dev/ftms-readonly`.
   callbacks; BleakClientWithServiceCache; two connector attempts, 40-second setup
   timeout, HA-managed retry/backoff on setup failure. No reset of the shared adapter
   or indiscriminate close_stale_connections call.
+- Require current scanner discovery rather than a historical advertisement.
+  Repeated post-connection failures back off 5, 10, 20, ... up to 300 seconds;
+  one minute of continuously received telemetry resets that failure counter.
 - Full realtime frames are delivered, including repeated and all-zero frames.
   Removed upstream set-difference logic that could reference missing fields.
   Malformed packets clear the assembly and produce a quality event.
@@ -37,6 +40,8 @@ Branch: `homeassistant-dev/ftms-readonly`.
 - Private append-only sample journal, fsync on each record, bounded write queue,
   deterministic session replay, and explicit storage-error status.
 - Corrected energy-rate sensor units to kcal/h and kcal/min.
+- Heart-rate zero/255 placeholders invalidate the HR sensor instead of reporting
+  an absent heart-rate source as a measurement.
 - Simplified config flow compatible with current HA, with duplicate entry checks.
 - Verify the FTMS realtime GATT characteristic and choose its decoder rather than
   trusting advertised machine type; fail closed on ambiguity. A captured bike

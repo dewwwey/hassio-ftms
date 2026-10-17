@@ -1,5 +1,12 @@
 # Fitness Machine Service
 
+This local branch is **read-only** and targets the Kettler HOI Ride+ investigation.
+See [PATCHES.md](PATCHES.md) for source provenance and rollback,
+[BASIL_INTERFACE.md](BASIL_INTERFACE.md) for the private telemetry/session API,
+and [ACCEPTANCE.md](ACCEPTANCE.md) for verified versus untested behavior.
+Controls are disabled. This branch is installed manually and is not an upstream
+release or a published HACS repository.
+
 [Home Assistant](https://www.home-assistant.io/) [HACS](https://hacs.xyz/) custom component for working with fitness equipment with a Bluetooth interface.
 
 The component is based on the [pyftms](https://github.com/dudanov/pyftms) library, which complies with the [Bluetooth Fitness Machine Service v1.0 standard](https://www.bluetooth.com/specifications/specs/fitness-machine-service-1-0/).
@@ -8,7 +15,7 @@ Component capabilities:
 
 1. Automatically detect Bluetooth fitness devices nearby, notifying the user about it;
 2. Setup Wizard, which allows you to easily configure the device by determining its type and set of sensors in automatic or manual modes. The set of sensors can be changed.
-3. Collects training data from fitness equipment and allows you to set training parameters specific to the type of equipment.
+3. Collects training data from fitness equipment; this branch disables parameter controls.
 
 Supported fitness machines:
 

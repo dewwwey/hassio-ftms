@@ -13,7 +13,7 @@ public reports. Synthetic tests do not prove bike behavior.
 - [x] Active mode saw FTMS 1826 service data and Device Information 180a.
 - [x] Weak reception observed. Its causal role is unverified.
 - [x] Exact upstream requirement excludes Python 3.14; current upstream too.
-- [x] Local suite: 16 tests pass under Python 3.14.0, bleak 3.0.2,
+- [x] Local suite: 25 tests pass under Python 3.14.0, bleak 3.0.2,
       bleak-retry-connector 4.7.1. Includes decoding, zero/repeated fields,
       disappearing fields, malformed frames, denied control, session/reward
       boundaries, gap/pause/reset/restart semantics, journal flush, truncated-tail
@@ -22,9 +22,10 @@ public reports. Synthetic tests do not prove bike behavior.
 
 ## Live acceptance to record
 
-- [ ] FTMS entry connects and GATT feature reads succeed on HA Python 3.14.6.
+- [x] FTMS entry connects and GATT feature reads succeed on HA Python 3.14.6
+      (initial dev1 connection); final dev2 restart recovery is pending.
 - [ ] List actually observed metrics; distinguish capabilities from usable data.
-- [ ] Observe idle zeros and fresh timestamps without phantom sessions.
+- [x] Observe idle zeros and fresh timestamps without phantom sessions (dev1).
 - [ ] Record a real start, ride, stop, two-minute idle finalization; inspect time
       series and summary privately against the user's timing.
 - [ ] Query completed sessions twice and verify stable IDs/summary/no duplicates.

@@ -173,6 +173,15 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(len({r["session_id"] for r in exported}), 2)
         self.assertEqual(exported, sessions.completed_sessions(records, "synthetic-device"))
 
+    def test_long_outage_expires_before_new_ride_without_watchdog(self):
+        state = self.run_records([sample(-1, 0), sample(0), sample(5),
+                                  {"kind": "disconnect", "ts": 6}])
+        identity = state.current["session_id"]
+        state.apply(sample(10000))
+        self.assertEqual(state.last["session_id"], identity)
+        self.assertIn("offline_timeout", state.last["flags"])
+        self.assertNotEqual(state.current["session_id"], identity)
+
 
 if __name__ == "__main__":
     unittest.main()

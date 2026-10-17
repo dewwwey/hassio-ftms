@@ -17,6 +17,11 @@ class Sessions:
 
     def apply(self, record):
         ts, kind = record["ts"], record["kind"]
+        # Setup retries have no running watchdog. Expire before resumed samples
+        # as well, so a new day's ride cannot merge into yesterday's outage.
+        if (self.current and kind in ("sample", "restart", "tick")
+                and ts - self.current["last_sample"] >= OFFLINE_END):
+            self._finish(self.current["last_activity"], "offline_timeout")
         if kind in ("disconnect", "restart", "storage_gap", "malformed_packet"):
             if self.current:
                 self._flag(kind)
@@ -24,8 +29,6 @@ class Sessions:
             self.saw_idle = False
             return
         if kind == "tick":
-            if self.current and ts - self.current["last_sample"] >= OFFLINE_END:
-                self._finish(self.current["last_activity"], "offline_timeout")
             return
         if kind != "sample":
             return
