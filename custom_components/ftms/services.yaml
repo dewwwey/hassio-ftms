@@ -1,0 +1,22 @@
+get_sessions:
+  name: Get recorded sessions
+  description: Return private completed session observations from the local journal. Does not publish or credit rewards.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        text:
+    offset:
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 1000000
+          mode: box
+    limit:
+      default: 50
+      selector:
+        number:
+          min: 1
+          max: 100
+          mode: box

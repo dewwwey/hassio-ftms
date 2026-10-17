@@ -14,8 +14,8 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from pyftms import MovementDirection, TrainingStatusCode
-from pyftms.client import const as c
+from ._vendor.pyftms import MovementDirection, TrainingStatusCode
+from ._vendor.pyftms.client import const as c
 
 from . import FtmsConfigEntry
 from .entity import FtmsEntity
@@ -57,15 +57,13 @@ _ELEVATION_GAIN_POSITIVE = SensorEntityDescription(
 
 _ENERGY_PER_HOUR = SensorEntityDescription(
     key=c.ENERGY_PER_HOUR,
-    device_class=SensorDeviceClass.ENERGY,
-    native_unit_of_measurement=UnitOfEnergy.KILO_CALORIE,
+    native_unit_of_measurement="kcal/h",
     state_class=SensorStateClass.MEASUREMENT,
 )
 
 _ENERGY_PER_MINUTE = SensorEntityDescription(
     key=c.ENERGY_PER_MINUTE,
-    device_class=SensorDeviceClass.ENERGY,
-    native_unit_of_measurement=UnitOfEnergy.KILO_CALORIE,
+    native_unit_of_measurement="kcal/min",
     state_class=SensorStateClass.MEASUREMENT,
 )
 
@@ -291,9 +289,10 @@ async def async_setup_entry(
             entry=entry,
             description=_ENTITIES[key],
         )
-        for key in data.sensors
+        for key in data.sensors if key in _ENTITIES
     ]
 
+    entities.append(FtmsStatus(entry))
     async_add_entities(entities)
 
 
@@ -304,7 +303,7 @@ class FtmsSensorEntity(FtmsEntity, SensorEntity):
         super().__init__(entry, description)
 
         if (x := self.ftms.get_property(self.key)) is None:
-            x = 0
+            x = None
 
         elif isinstance(x, Enum):
             x = x.name.lower()
@@ -315,11 +314,55 @@ class FtmsSensorEntity(FtmsEntity, SensorEntity):
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
 
-        e = self.coordinator.data
+        value = self.coordinator.values.get(self.key)
+        if isinstance(value, Enum):
+            value = value.name.lower()
+        self._attr_native_value = value
+        self.async_write_ha_state()
 
-        if e.event_id == "update" and (value := e.event_data.get(self.key)) is not None:
-            if isinstance(value, Enum):
-                value = value.name.lower()
+    @property
+    def available(self):
+        return super().available and self.coordinator.field_fresh(self.key)
 
-            self._attr_native_value = value
-            self.async_write_ha_state()
+    @property
+    def extra_state_attributes(self):
+        ts = self.coordinator.field_times.get(self.key)
+        return {"source": "ftms_notification", "last_received_ts": ts}
+
+class FtmsStatus(FtmsEntity, SensorEntity):
+    """Connection/freshness and versioned private Basil interface."""
+    _attr_name = "Telemetry status"
+    _attr_translation_key = None
+
+    def __init__(self, entry):
+        super().__init__(entry, SensorEntityDescription(key="telemetry_status"))
+        self._attr_translation_key = None
+
+    @property
+    def available(self):
+        return True
+
+    @property
+    def native_value(self):
+        if not self.ftms.is_connected:
+            return "disconnected"
+        if not self.coordinator.fresh:
+            return "stale"
+        return self.coordinator.sessions.status
+
+    @property
+    def extra_state_attributes(self):
+        c = self.coordinator
+        return {
+            "schema_version": 1, "last_received_ts": c.last_received,
+            "observed_metrics": sorted(c.observed),
+            "current_session": c.sessions.current,
+            "last_session": c.sessions.last,
+            "completed_count": c.sessions.completed_count,
+            "storage_error": c.storage_error,
+            "read_only": True,
+        }
+
+    @callback
+    def _handle_coordinator_update(self):
+        self.async_write_ha_state()

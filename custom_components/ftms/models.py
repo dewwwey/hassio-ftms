@@ -3,7 +3,7 @@
 import dataclasses as dc
 
 from homeassistant.helpers.device_registry import DeviceInfo
-from pyftms import FitnessMachine
+from ._vendor.pyftms import FitnessMachine
 
 from .coordinator import DataCoordinator
 

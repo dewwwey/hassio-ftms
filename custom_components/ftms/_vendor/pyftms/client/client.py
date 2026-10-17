@@ -12,7 +12,7 @@ from typing import Any, Callable, ClassVar
 from bleak import BleakClient
 from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
-from bleak_retry_connector import close_stale_connections, establish_connection
+from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
 
 from ..models import (
     ControlCode,
@@ -95,11 +95,10 @@ class FitnessMachine(ABC, PropertiesManager):
         self._updater = DataUpdater(self._data_model, self._on_event)
         self._controller = MachineController(self._on_event)
 
-    @classmethod
     def _get_supported_properties(
-        cls, features: MachineFeatures = MachineFeatures(~0)
+        self, features: MachineFeatures = MachineFeatures(~0)
     ) -> list[str]:
-        return cls._data_model._get_features(features)
+        return self._data_model._get_features(features)
 
     async def __aenter__(self):
         await self.connect()
@@ -242,6 +241,8 @@ class FitnessMachine(ABC, PropertiesManager):
     def _on_disconnect(self, cli: BleakClient) -> None:
         _LOGGER.debug("Client disconnected. Reset updaters states.")
 
+        if getattr(self, "_cli", None) is not cli:
+            return
         del self._cli
         self._updater.reset()
         self._controller.reset()
@@ -253,12 +254,13 @@ class FitnessMachine(ABC, PropertiesManager):
         if not self._need_connect or self.is_connected:
             return
 
-        await close_stale_connections(self._device)
 
         _LOGGER.debug("Initialization. Trying to establish connection.")
 
         self._cli = await establish_connection(
-            client_class=BleakClient,
+            client_class=BleakClientWithServiceCache,
+            max_attempts=2,
+            ble_device_callback=lambda: self._device,
             device=self._device,
             name=self.name,
             disconnected_callback=self._on_disconnect,
@@ -268,6 +270,10 @@ class FitnessMachine(ABC, PropertiesManager):
         )
 
         _LOGGER.debug("Connection success.")
+
+        # Some Kettler advertisements report treadmill while GATT exposes a bike.
+        # Verify the actual characteristic; never infer a decoder from its name.
+        self._verify_gatt_machine()
 
         # Reading necessary static fitness machine information
 
@@ -281,21 +287,28 @@ class FitnessMachine(ABC, PropertiesManager):
                 self._settings_ranges,
             ) = await read_features(self._cli, self._machine_type)
 
-        await self._controller.subscribe(self._cli)
+        # Read-only deployment: no control-point subscription or commands.
         await self._updater.subscribe(self._cli, self._data_uuid)
 
     # COMMANDS
 
-    async def _write_command(
-        self, code: ControlCode | None = None, *args, **kwargs
-    ):
-        if self._need_connect:
-            await self._connect()
-            return await self._controller.write_command(
-                self._cli, code, timeout=self._timeout, **kwargs
-            )
+    def _verify_gatt_machine(self):
+        from .machines import CrossTrainer, IndoorBike, Rower, Treadmill
 
-        return ResultCode.FAILED
+        if not self._cli.services.get_service(c.FTMS_UUID):
+            raise ValueError("GATT does not expose Fitness Machine Service")
+        candidates = [cls for cls in (CrossTrainer, IndoorBike, Rower, Treadmill)
+                      if self._cli.services.get_characteristic(cls._data_uuid)]
+        if len(candidates) != 1:
+            raise ValueError("Ambiguous or missing FTMS realtime GATT characteristic")
+        cls = candidates[0]
+        self._machine_type = cls._machine_type
+        self._data_uuid = cls._data_uuid
+        self._data_model = cls._data_model
+        self._updater = DataUpdater(self._data_model, self._on_event)
+
+    async def _write_command(self, *args, **kwargs):
+        raise PermissionError("FTMS control is disabled in this read-only deployment")
 
     async def reset(self) -> ResultCode:
         """Initiates the procedure to reset the controllable settings of a fitness machine."""

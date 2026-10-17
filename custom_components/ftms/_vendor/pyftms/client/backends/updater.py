@@ -37,7 +37,12 @@ class DataUpdater:
 
     def _on_notify(self, c: BleakGATTCharacteristic, data: bytearray) -> None:
         _LOGGER.debug("Received notify: %s", data.hex(" ").upper())
-        data_ = self._serializer.deserialize(data)._asdict()
+        try:
+            data_ = self._serializer.deserialize(data)._asdict()
+        except (ValueError, AssertionError, EOFError, TypeError, IndexError):
+            self._result.clear()
+            self._cb(UpdateEvent(event_id="update", event_data={"packet_error": 1}))
+            return
         _LOGGER.debug("Received notify dict: %s", data_)
         self._result |= data_
 
@@ -46,16 +51,6 @@ class DataUpdater:
             _LOGGER.debug("'More Data' bit is set. Waiting for next data.")
             return
 
-        # My device sends a lot of null packets during wakeup and sleep mode.
-        # So I just filter null packets.
-        if any(self._result.values()):
-            update = self._result.items() ^ self._prev.items()
-
-            if update := {k: self._result[k] for k, _ in update}:
-                _LOGGER.debug("Update data: %s", update)
-                update = cast(UpdateEventData, update)  # unsafe casting
-                update = UpdateEvent(event_id="update", event_data=update)
-                self._cb(update)
-                self._prev = self._result.copy()
-
+        # Every complete frame is evidence, including repeated and all-zero frames.
+        self._cb(UpdateEvent(event_id="update", event_data=self._result.copy()))
         self._result.clear()
