@@ -23,7 +23,7 @@ public reports. Synthetic tests do not prove bike behavior.
 ## Live acceptance to record
 
 - [x] FTMS entry connects and GATT feature reads succeed on HA Python 3.14.6
-      (initial dev1 connection); final dev2 restart recovery is pending.
+      (initial dev1 connection); final dev3 restart recovery is pending.
 - [ ] List actually observed metrics; distinguish capabilities from usable data.
 - [x] Observe idle zeros and fresh timestamps without phantom sessions (dev1).
 - [ ] Record a real start, ride, stop, two-minute idle finalization; inspect time

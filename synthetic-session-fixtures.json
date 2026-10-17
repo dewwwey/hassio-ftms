@@ -14,9 +14,7 @@
         "active_seconds": 1200.0,
         "quality": "complete",
         "flags": [],
-        "intent_confirmed": true,
-        "duration_qualifies": true,
-        "proposed_reward_cents": 300
+        "intent_confirmed": true
       }
     },
     {
@@ -32,9 +30,7 @@
         "active_seconds": 1200.0,
         "quality": "complete",
         "flags": [],
-        "intent_confirmed": true,
-        "duration_qualifies": true,
-        "proposed_reward_cents": 300
+        "intent_confirmed": true
       }
     },
     {
@@ -50,9 +46,7 @@
         "active_seconds": 599.0,
         "quality": "complete",
         "flags": [],
-        "intent_confirmed": true,
-        "duration_qualifies": false,
-        "proposed_reward_cents": 0
+        "intent_confirmed": true
       }
     },
     {
@@ -68,9 +62,7 @@
         "active_seconds": 600.0,
         "quality": "complete",
         "flags": [],
-        "intent_confirmed": false,
-        "duration_qualifies": true,
-        "proposed_reward_cents": 200
+        "intent_confirmed": false
       }
     },
     {
@@ -88,9 +80,7 @@
         "flags": [
           "disconnect"
         ],
-        "intent_confirmed": true,
-        "duration_qualifies": false,
-        "proposed_reward_cents": 0
+        "intent_confirmed": true
       }
     },
     {
@@ -108,9 +98,7 @@
         "flags": [
           "restart"
         ],
-        "intent_confirmed": true,
-        "duration_qualifies": false,
-        "proposed_reward_cents": 0
+        "intent_confirmed": true
       }
     },
     {
@@ -126,9 +114,7 @@
         "active_seconds": 300.0,
         "quality": "complete",
         "flags": [],
-        "intent_confirmed": true,
-        "duration_qualifies": false,
-        "proposed_reward_cents": 0
+        "intent_confirmed": true
       }
     }
   ]

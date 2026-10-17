@@ -38,6 +38,11 @@ addresses and credentials are excluded. Private source journal stays in HA.
    explicit storage-health metadata to completed-session export and closes an
    over-30-minute outage before accepting a later ride, even without a running
    watchdog during setup retries. Those changes pass local regression tests.
+7. Dev3 removes all proposed amounts and eligibility verdicts from telemetry.
+   Coach Basil's synthetic validation found gaps in its separate ledger's schema,
+   confirmation gate, second/minute conversion and timestamp-string deduplication.
+   Those fixes belong to basilisk-dev; no real ledger was changed by this work.
+   HA exports exact observed seconds, stable IDs and quality facts only.
 
 ## Available entities
 

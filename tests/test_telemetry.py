@@ -115,13 +115,14 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(first.last["active_seconds"], 600)
         self.assertEqual(first.last["total_seconds"], 601)
         self.assertEqual(first.last["quality"], "complete")
-        self.assertEqual(first.last["proposed_reward_cents"], 200)
+        self.assertNotIn("proposed_reward_cents", first.last)
         self.assertFalse(first.last["intent_confirmed"])
 
-    def test_reward_boundaries(self):
-        for seconds, reward in ((599, 0), (600, 200), (1199, 200), (1200, 300)):
+    def test_duration_boundaries_are_reported_without_rounding_to_minutes(self):
+        for seconds in (599, 600, 1199, 1200):
             state = self.run_records(self.completed_ride(seconds))
-            self.assertEqual(state.last["proposed_reward_cents"], reward)
+            self.assertEqual(state.last["active_seconds"], seconds)
+            self.assertNotIn("proposed_reward_cents", state.last)
 
     def test_pause_and_resume_keep_id_and_exclude_pause(self):
         state = self.run_records([sample(-1, 0), sample(0), sample(5)])
@@ -142,7 +143,7 @@ class SessionTests(unittest.TestCase):
         state.apply({"kind": "tick", "ts": 2000})
         self.assertEqual(state.last["session_id"], identity)
         self.assertEqual(state.last["quality"], "partial")
-        self.assertEqual(state.last["proposed_reward_cents"], 0)
+        self.assertNotIn("proposed_reward_cents", state.last)
 
     def test_missing_samples_and_clock_regression_are_flagged(self):
         state = self.run_records([sample(-1, 0), sample(0), sample(50), sample(40)])

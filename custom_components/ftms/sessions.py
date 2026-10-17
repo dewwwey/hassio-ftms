@@ -102,11 +102,6 @@ class Sessions:
         s["total_seconds"] = max(0, end_ts - s["start_ts"])
         s["active_seconds"] = round(s["active_seconds"], 3)
         s["quality"] = "partial" if s["flags"] else "complete"
-        s["reward_status"] = "requires_quality_review" if s["flags"] else "requires_intent_confirmation"
-        s["duration_qualifies"] = s["active_seconds"] >= 600
-        s["proposed_reward_cents"] = (
-            200 + (100 if s["active_seconds"] >= 1200 else 0)
-        ) if s["duration_qualifies"] and not s["flags"] else 0
         for key in ("distance_previous", "inactive_since"):
             s.pop(key, None)
         self.last = s

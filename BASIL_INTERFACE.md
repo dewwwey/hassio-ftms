@@ -55,8 +55,8 @@ No agent credentials or new external HA client are provisioned by this patch.
 
 Session fields include stable `session_id`, source, `start_ts`, `end_ts`,
 `active_seconds`, `total_seconds`, observed `distance_m` delta or null, sample
-count, `flags`, `quality`, `duration_qualifies`, `intent_confirmed`, and reward
-review status. UTC times are Unix seconds. Distance is an observed lower bound
+count, `flags`, `quality`, and `intent_confirmed`. UTC times are Unix seconds.
+Distance is an observed lower bound
 if samples are missing. No missing interval is interpolated.
 
 The ID hashes the persisted source and first activity timestamp. Replaying the
@@ -76,12 +76,13 @@ source; migrations must preserve source identity and journal together.
   packets, missing cadence, clock regression and missing samples are flagged.
 - `quality=complete` means complete under these observation rules, not proof of
   intentional training or medical accuracy.
-- `duration_qualifies` uses observed active_seconds >=600. A clean record has a
-  deterministic proposed amount of 200 cents, plus 100 at >=1200 seconds.
-  Partial records propose zero and require quality review. Every record starts
-  with `intent_confirmed=false`. This patch never credits money or writes Basil's
-  reward ledger. Intent confirmation and the authoritative reward ledger remain
-  separate deterministic operations.
+- Every record starts with `intent_confirmed=false`. The interface sends no
+  amounts or reward-eligibility verdicts. Intent confirmation, thresholds, payment
+  and deduplication belong exclusively to the separate deterministic ledger.
+  The requested policy is >=600 active seconds for EUR 2, plus EUR 1 at >=1200,
+  with complete quality, no flags/storage errors, and user confirmation required.
+  Compare seconds directly; never round to minutes before evaluating eligibility.
+  Use `session_id` for deduplication, never timestamp display strings.
 
 ## Persistence and limits
 
