@@ -10,7 +10,7 @@ This checkout is the **dewwwey/hassio-ftms** fork of
 
 Current state (2026-10-19):
 
-- `main` is up to date on `origin`, 9 commits ahead of `upstream/main`.
+- `main` is up to date on `origin` and ahead of `upstream/main`.
 - The local snapshot history was grafted onto `upstream/main`, so upstream
   history remains an ancestor and future upstream merges are possible.
 - Release checkpoint: tag `v0.24.9-dev10`.
