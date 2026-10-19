@@ -1,0 +1,41 @@
+{
+  "id": "ftms_clear_ready_notice",
+  "alias": "Bike clear stale ready notice",
+  "description": "Clear only the Bike ready confirmation when either FTMS status reports lost readiness, a status entity becomes unavailable, or HA restarts. Failure notices remain visible.",
+  "mode": "single",
+  "triggers": [
+    {
+      "trigger": "state",
+      "entity_id": [
+        "sensor.kettler_ftms_telemetry_status",
+        "sensor.kettler_ftms_diagnostics"
+      ],
+      "attribute": "recording_ready",
+      "to": false
+    },
+    {
+      "trigger": "state",
+      "entity_id": [
+        "sensor.kettler_ftms_telemetry_status",
+        "sensor.kettler_ftms_diagnostics"
+      ],
+      "to": [
+        "unknown",
+        "unavailable"
+      ]
+    },
+    {
+      "trigger": "homeassistant",
+      "event": "start"
+    }
+  ],
+  "conditions": [],
+  "actions": [
+    {
+      "action": "persistent_notification.dismiss",
+      "data": {
+        "notification_id": "ftms_bike_ready"
+      }
+    }
+  ]
+}

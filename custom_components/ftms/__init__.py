@@ -7,25 +7,106 @@ from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS, EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import HomeAssistant, SupportsResponse, callback
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from ._vendor import pyftms
 from .coordinator import DataCoordinator
 from .models import FtmsData
 from .sessions import completed_sessions
+from .observations import read_page, read_snapshot
 
-PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
+PLATFORMS = [Platform.SENSOR, Platform.BUTTON, Platform.NUMBER]
 type FtmsConfigEntry = ConfigEntry[FtmsData]
 
 
+def _control_scope(ftms):
+    """Report only controls supported by the current live connection."""
+    scope = ["finish_workout"]
+    if ftms and ftms.is_connected:
+        for setting in ("target_resistance", "target_power"):
+            if setting in ftms.supported_settings and setting in ftms.supported_ranges:
+                scope.append(setting)
+    return scope
+
+
 async def async_setup(hass, config):
+    def resolve(call):
+        entry = hass.config_entries.async_get_entry(call.data["config_entry_id"])
+        if entry is None or entry.domain != "ftms":
+            raise HomeAssistantError("Unknown FTMS config entry")
+        runtime = getattr(entry, "runtime_data", None)
+        coordinator = runtime.coordinator if runtime and not runtime.coordinator.closed else None
+        return entry, coordinator, Path(hass.config.path(".storage", "ftms", entry.entry_id + ".jsonl"))
+
+    async def flush(coordinator):
+        if coordinator:
+            if coordinator.worker is None or coordinator.worker.done():
+                return "writer_not_running"
+            try:
+                async with asyncio.timeout(5):
+                    await coordinator.queue.join()
+            except TimeoutError:
+                return "flush_timeout"
+            return coordinator.storage_error
+        return "entry_not_loaded"
+
+    async def get_status(call):
+        entry, c, path = resolve(call)
+        error = await flush(c)
+        if c:
+            connected, fresh = c.ftms.is_connected, c.fresh
+            snapshot = {"last_received_ts": c.last_received, "latest_event": c.latest_event}
+            snapshot.update(current_session=c.sessions.current, last_session=c.sessions.last,
+                            completed_count=c.sessions.completed_count,
+                            observed_metrics=sorted(c.observed), observed_metrics_scope="connection")
+            session = c.sessions.current or c.sessions.last
+            snapshot["last_activity_ts"] = session["last_activity"] if session else None
+            state = c.sessions.status if fresh else "stale" if connected else "disconnected"
+        else:
+            connected, fresh, state = False, False, "disconnected"
+            def recover():
+                stat = path.stat() if path.exists() else None
+                signature = (stat.st_mtime_ns, stat.st_size) if stat else None
+                cache = hass.data.setdefault("ftms_offline_snapshots", {})
+                previous = cache.get(entry.entry_id)
+                if previous is None or previous[0] != signature:
+                    cache[entry.entry_id] = (signature, read_snapshot(path, entry.entry_id))
+                return cache[entry.entry_id][1]
+            try:
+                snapshot = await hass.async_add_executor_job(recover)
+            except (OSError, ValueError, KeyError) as exc:
+                error = type(exc).__name__
+                snapshot = {"last_received_ts": None, "last_activity_ts": None,
+                            "last_persisted_ts": None, "latest_event": None}
+        return {"schema_version": 2, "state": state, "connected": connected, "fresh": fresh,
+                "recording_ready": fresh and error is None, "storage_error": error, **snapshot,
+                "last_persisted_ts": c.last_persisted_ts if c else snapshot.get("last_persisted_ts"),
+                "hr_validation": "unvalidated", "hr_source": "bike_ftms_heart_rate",
+                "supported_settings": list(c.ftms.supported_settings) if c and connected else [],
+                "supported_ranges": {k: r._asdict() for k, r in c.ftms.supported_ranges.items()} if c and connected else {},
+                "control_scope": _control_scope(c.ftms if c else None), "automatic_control": False}
+
+    async def get_observations(call):
+        entry, c, path = resolve(call)
+        error = await flush(c)
+        try:
+            page = await hass.async_add_executor_job(
+                read_page, path, entry.entry_id, call.data.get("cursor"), call.data["limit"])
+        except (OSError, ValueError) as exc:
+            raise HomeAssistantError(f"Observation read failed: {exc}") from exc
+        return {"schema_version": 2, "records_schema_version": 1, "telemetry_observed": True,
+                "storage_error": error, "hr_validation": "unvalidated",
+                "units": {"cadence_instant": "rpm", "power_instant": "W", "speed_instant": "km/h",
+                          "distance_total": "m", "time_elapsed": "s", "heart_rate": "bpm",
+                          "resistance_level": "device level"}, **page}
+
     async def get_sessions(call):
         entry_id = call.data["config_entry_id"]
         entry = hass.config_entries.async_get_entry(entry_id)
         if entry is None or entry.domain != "ftms":
             raise ValueError("Unknown FTMS config entry")
-        if hasattr(entry, "runtime_data") and entry.runtime_data:
-            await entry.runtime_data.coordinator.queue.join()
+        _, coordinator, _ = resolve(call)
+        error = await flush(coordinator)
         path = Path(hass.config.path(".storage", "ftms", entry_id + ".jsonl"))
 
         def read():
@@ -37,10 +118,9 @@ async def async_setup(hass, config):
 
         sessions = await hass.async_add_executor_job(read)
         offset, limit = call.data["offset"], call.data["limit"]
-        runtime = getattr(entry, "runtime_data", None)
-        storage_error = runtime.coordinator.storage_error if runtime else "entry_not_loaded"
+        storage_error = error
         return {"schema_version": 2, "read_only": False, "telemetry_observed": True,
-                "automatic_control": False, "control_scope": ["finish_workout"],
+                "automatic_control": False, "control_scope": _control_scope(coordinator.ftms if coordinator else None),
                 "storage_error": storage_error, "total": len(sessions),
                 "sessions": sessions[offset:offset + limit],
                 "has_more": offset + limit < len(sessions)}
@@ -60,6 +140,16 @@ async def async_setup(hass, config):
     hass.services.async_register("ftms", "finish_workout", finish, schema=vol.Schema({
         vol.Required("config_entry_id"): str,
     }), supports_response=SupportsResponse.OPTIONAL)
+    hass.services.async_register("ftms", "get_status", get_status, schema=vol.Schema({
+        vol.Required("config_entry_id"): str,
+    }), supports_response=SupportsResponse.ONLY)
+    hass.services.async_register("ftms", "get_observations", get_observations, schema=vol.Schema({
+        vol.Required("config_entry_id"): str,
+        vol.Optional("cursor"): vol.Any(None, str),
+        vol.Optional("limit", default=100): vol.All(int, vol.Range(min=1, max=200)),
+    }), supports_response=SupportsResponse.ONLY)
+    from .wake_runtime import async_setup_publisher
+    await async_setup_publisher(hass)
     return True
 
 

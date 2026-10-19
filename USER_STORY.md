@@ -38,6 +38,13 @@ Alert Coach Basil promptly on actual exercise onset, with recovery/resumption
 events that do not cause duplicate starts. This needs a tested private delivery
 path and confirmation that Basil received it. NEXUS discussion 5 is public to
 participating agents and is not a channel for exercise events or health data.
+The current preferred design is an HA MQTT wake with only an event ID, entity
+pointer and timestamp; Basilisk currently cannot reach the HA broker, so no
+publisher is enabled. Basil's existing read-only MCP route also cannot call the
+new response-capable FTMS observation action yet. Do not expose the broker,
+broaden credentials, or work around MCP tool classification to bridge those
+gaps. A local `ftms_activity` event can serve HA automations after its sample
+and event are fsynced, but does not prove Basil received anything.
 
 The primary HR source is a chest strap connected to the bike. Verify that live
 strap readings reach HA with timestamps; the existing HR field has so far only
@@ -61,6 +68,11 @@ HR source/freshness, missing-HR and disconnect behavior, and a readily available
 manual override. Do not invent HR targets or enable unbounded agent writes.
 Transport recovery must not silently reapply an old exercise target on reconnect.
 
+The administrator additionally requested repair of the Pixel Watch 2 companion
+app entity-list error and evaluation of its direct native HR sensor, independently
+of phone Health Connect. WATCH_HR.md records that prerequisite and its freshness
+acceptance. Registration and a visible old sensor state are not validation.
+
 ## Logging and plug measurements
 
 Keep useful bounded connection/retry/failure diagnostics and durable telemetry.
@@ -79,6 +91,17 @@ or choose training intensity from an unvalidated plug-power threshold.
 1. Repeated standby wake and explicit pre-ride recovery, with a measured deadline
    and unambiguous Ready/failure feedback. Three successful cold power cycles
    already exist; standby wake remains a reproduced failure case.
+   HA `script.ftms_start_ride` keeps an already-ready
+   connection, refuses recovery after very recent activity or when fresh
+   telemetry has a storage fault, checks that the smart plug is available,
+   cycles the plug at most once, reloads the FTMS entry and waits up to 90
+   seconds for a newer measurement. It is loaded and one live recovery on
+   2026-10-18 reached fresh, recording-ready idle telemetry with healthy storage
+   and an advancing persisted timestamp. A subsequent dev4 idle recovery reached
+   its first persisted sample in 17.45 seconds and showed Bike ready. An immediate
+   second invocation showed the already-ready message, finished immediately and
+   left the plug's last-change timestamp unchanged. Active-ride refusal, failure
+   feedback and repeated ordinary standby wake still need live acceptance.
 2. Persist live measurements and provide Basil a private incremental read path,
    including fragments, source timestamps, gaps and storage health. Completed
    summaries alone do not meet the revised requirement.

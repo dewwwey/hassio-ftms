@@ -1,0 +1,44 @@
+# Independent of the FTMS config-entry lifecycle; local metadata only.
+triggers:
+  - trigger: time_pattern
+    seconds: "/10"
+  - trigger: homeassistant
+    event: start
+actions:
+  - variables:
+      bike:
+        state: diagnostic_error
+        connected: false
+        fresh: false
+        recording_ready: false
+        storage_error: status_action_failed
+  - action: ftms.get_status
+    data:
+      config_entry_id: REPLACE_WITH_FTMS_CONFIG_ENTRY_ID
+    response_variable: bike
+    continue_on_error: true
+sensor:
+  - name: Kettler FTMS diagnostics
+    unique_id: kettler_ftms_diagnostics_v1
+    icon: mdi:bicycle
+    state: "{{ bike.state | default('diagnostic_error') }}"
+    attributes:
+      schema_version: 2
+      checked_at: "{{ as_timestamp(now()) }}"
+      connected: "{{ bike.connected | default(false) }}"
+      fresh: "{{ bike.fresh | default(false) }}"
+      recording_ready: "{{ bike.recording_ready | default(false) }}"
+      storage_error: "{{ bike.storage_error | default('status_action_failed') }}"
+      last_received_ts: "{{ bike.last_received_ts | default(none) }}"
+      last_persisted_ts: "{{ bike.last_persisted_ts | default(none) }}"
+      last_activity_ts: "{{ bike.last_activity_ts | default(none) }}"
+      latest_event: "{{ bike.latest_event | default(none) }}"
+      completed_count: "{{ bike.completed_count | default(none) }}"
+      current_session: "{{ bike.current_session | default(none) }}"
+      last_session: "{{ bike.last_session | default(none) }}"
+      observed_metrics: "{{ bike.observed_metrics | default([]) }}"
+      observed_metrics_scope: "{{ bike.observed_metrics_scope | default('unknown') }}"
+      hr_validation: "{{ bike.hr_validation | default('unvalidated') }}"
+      automatic_control: false
+      control_scope: "{{ bike.control_scope | default([]) }}"
+

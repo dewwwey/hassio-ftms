@@ -1,3 +1,29 @@
+get_status:
+  name: Get recording status
+  description: Return connection freshness, journal health, persisted last-seen metadata and the latest durable activity event, including while offline.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        text:
+get_observations:
+  name: Get original observations
+  description: Read a bounded page of private journal records using an opaque cursor. Does not reconstruct or publish measurements.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        text:
+    cursor:
+      selector:
+        text:
+    limit:
+      default: 100
+      selector:
+        number:
+          min: 1
+          max: 200
+          mode: box
 finish_workout:
   name: Finish workout
   description: Ask the bike to stop the workout using FTMS, wait for confirmation, and finalize the observed session without disconnecting.
@@ -28,3 +54,28 @@ get_sessions:
           min: 1
           max: 100
           mode: box
+
+get_coach_delivery:
+  name: Get coaching delivery status
+  description: Read recording-independent coaching publisher and receipt status.
+test_coach_wake:
+  name: Test coaching wake transport
+  description: Create a fresh test_ping with new_probe true, or query its correlated receipt with new_probe false; never creates a ride or changes bike controls.
+  fields:
+    new_probe:
+      name: New probe
+      description: Create one new synthetic ping. Leave false to check the saved probe receipt without resending.
+      required: false
+      selector:
+        boolean: {}
+
+demo_coach_ping:
+  name: Send Basil demo ping
+  description: Send a fresh, synthetic demo_ping to the allowlisted COACH-BASIL receiver task and query its delivery receipt.
+  fields:
+    new_probe:
+      name: New demo ping
+      description: Start a new unique demo ping, or false to query the saved demo receipt without resending.
+      required: false
+      selector:
+        boolean: {}

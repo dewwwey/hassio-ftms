@@ -52,6 +52,8 @@ class JournalTests(unittest.IsolatedAsyncioTestCase):
             return await asyncio.to_thread(fn, *args)
         hass = SimpleNamespace(data={}, config=SimpleNamespace(path=lambda *parts: str(Path(path).joinpath(*parts))),
                                async_add_executor_job=executor)
+        hass.events = []
+        hass.bus = SimpleNamespace(async_fire=lambda *args: hass.events.append(args))
         ftms = SimpleNamespace(is_connected=True)
         ftms.set_callback = lambda cb: setattr(ftms, "callback", cb)
         return DataCoordinator(hass, ftms, "synthetic")
@@ -194,3 +196,103 @@ class JournalTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(state.sessions.current)
             self.assertEqual(state.sessions.current["flags"], [])
             await state.close()
+
+    async def test_activity_events_are_durable_replayable_and_not_value_change_based(self):
+        with tempfile.TemporaryDirectory() as path:
+            state = self.make(path)
+            await state.open_journal()
+            def send(cadence, now):
+                with patch("journal_test_package.coordinator.time", return_value=now):
+                    state.ftms.callback(SimpleNamespace(event_id="update", event_data={"speed_instant": 0, "cadence_instant": cadence}))
+            send(0, 100)
+            send(60, 101)
+            send(60, 102)
+            await state.queue.join()
+            first = state.latest_event
+            self.assertEqual(first["kind"], "activity_started")
+            self.assertEqual(len(state.hass.events), 1)
+            records = [json.loads(line) for line in state.path.read_text().splitlines()]
+            self.assertIn(first, records)
+            send(0, 105)
+            send(60, 110)
+            await state.queue.join()
+            self.assertEqual(state.latest_event, first)
+            self.assertEqual(len(state.hass.events), 1)
+            send(0, 120)
+            send(60, 151)
+            await state.queue.join()
+            self.assertEqual(state.latest_event["kind"], "activity_resumed")
+            self.assertEqual(state.latest_event["session_id"], first["session_id"])
+            self.assertNotEqual(state.latest_event["event_id"], first["event_id"])
+            latest = state.latest_event
+            await state.close()
+            replay = self.make(path)
+            await replay.open_journal()
+            self.assertEqual(replay.latest_event, latest)
+            self.assertEqual(replay.hass.events, [])
+            await replay.close()
+
+    async def test_failed_onset_sample_cannot_publish_an_activity_event(self):
+        with tempfile.TemporaryDirectory() as path:
+            state = self.make(path)
+            await state.open_journal()
+            append = state._append
+            def fail_onset(record):
+                if record["kind"] == "sample" and record.get("metrics", {}).get("cadence_instant", 0) > 0:
+                    raise OSError("synthetic disk failure")
+                append(record)
+            with patch.object(state, "_append", side_effect=fail_onset):
+                with self.assertLogs("journal_test_package.coordinator", level="ERROR"):
+                    with patch("journal_test_package.coordinator.time", return_value=101):
+                        state.ftms.callback(SimpleNamespace(event_id="update", event_data={"cadence_instant": 60}))
+                    await state.queue.join()
+            self.assertEqual(state.storage_error, "OSError")
+            self.assertIsNone(state.latest_event)
+            self.assertEqual(state.hass.events, [])
+            records = [json.loads(line) for line in state.path.read_text().splitlines()]
+            self.assertFalse(any(r["kind"] == "activity_started" for r in records))
+            self.assertTrue(any(r["kind"] == "activity_event_suppressed" for r in records))
+            # Storage can accept later frames without clearing the fault or
+            # inventing a successful onset notification.
+            with patch("journal_test_package.coordinator.time", return_value=102):
+                state.ftms.callback(SimpleNamespace(event_id="update", event_data={"cadence_instant": 60}))
+            await state.close()
+            self.assertEqual(state.hass.events, [])
+            self.assertIn("storage_gap", state.sessions.current["flags"])
+
+    async def test_idle_heartbeat_persists_last_seen_without_continuous_idle_metrics(self):
+        with tempfile.TemporaryDirectory() as path:
+            state = self.make(path)
+            await state.open_journal()
+            for now in (100, 101, 129, 130, 131):
+                with patch("journal_test_package.coordinator.time", return_value=now):
+                    state.ftms.callback(SimpleNamespace(event_id="update", event_data={"speed_instant": 0, "cadence_instant": 0}))
+            await state.close()
+            records = [json.loads(line) for line in state.path.read_text().splitlines()]
+            self.assertEqual([r["kind"] for r in records], ["sample", "heartbeat"])
+            self.assertEqual(records[-1]["last_received_ts"], 130)
+
+    async def test_restart_marks_activity_inactive_and_emits_resume_after_grace(self):
+        with tempfile.TemporaryDirectory() as path:
+            first = self.make(path)
+            await first.open_journal()
+            def send(state, cadence, now):
+                with patch("journal_test_package.coordinator.time", return_value=now):
+                    state.ftms.callback(SimpleNamespace(event_id="update", event_data={"speed_instant": 0, "cadence_instant": cadence}))
+            send(first, 0, 100)
+            send(first, 60, 101)
+            await first.queue.join()
+            original_id = first.latest_event["session_id"]
+            await first.close()
+
+            second = self.make(path)
+            with patch("journal_test_package.coordinator.time", return_value=120):
+                await second.open_journal()
+            self.assertFalse(second.activity_active)
+            self.assertEqual(second.activity_inactive_since, 120)
+            send(second, 60, 151)
+            await second.queue.join()
+            self.assertEqual(second.latest_event["kind"], "activity_resumed")
+            self.assertEqual(second.latest_event["session_id"], original_id)
+            self.assertEqual(len(second.hass.events), 1)
+            await second.close()

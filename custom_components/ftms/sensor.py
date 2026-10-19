@@ -360,10 +360,18 @@ class FtmsStatus(FtmsEntity, SensorEntity):
             "last_session": c.sessions.last,
             "completed_count": c.sessions.completed_count,
             "storage_error": c.storage_error,
+            "recording_ready": c.fresh and c.storage_error is None and c.worker is not None and not c.worker.done(),
+            "latest_event": c.latest_event,
+            "last_persisted_ts": c.last_persisted_ts,
+            "hr_validation": "unvalidated",
             "read_only": False,
             "telemetry_observed": True,
             "automatic_control": False,
-            "control_scope": ["finish_workout"],
+            "control_scope": ["finish_workout"] + [
+                setting for setting in ("target_resistance", "target_power")
+                if c.ftms.is_connected and setting in c.ftms.supported_settings
+                and setting in c.ftms.supported_ranges
+            ],
         }
 
     @callback

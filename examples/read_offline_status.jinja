@@ -1,0 +1,13 @@
+{# Read-only diagnostic probe: no health measurements or session identifiers. #}
+{% set e = 'sensor.kettler_ftms_diagnostics' %}
+{% set age = as_timestamp(now()) - (state_attr(e, 'checked_at') | default(0, true) | float(0)) %}
+{{ {
+  'state': states(e),
+  'diagnostic_fresh': 0 <= age <= 25,
+  'connected': state_attr(e, 'connected'),
+  'recording_ready': state_attr(e, 'recording_ready'),
+  'storage_error': state_attr(e, 'storage_error'),
+  'has_last_session': state_attr(e, 'last_session') is not none,
+  'completed_count_present': state_attr(e, 'completed_count') is not none,
+  'observed_metrics_scope': state_attr(e, 'observed_metrics_scope')
+} | to_json }}

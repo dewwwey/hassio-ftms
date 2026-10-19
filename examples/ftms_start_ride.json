@@ -1,0 +1,279 @@
+{
+  "alias": "Start bike ride",
+  "description": "Explicit pre-ride recovery. Keeps an already-ready connection, otherwise performs one bounded power cycle and waits for a new, fresh FTMS measurement. Do not run while riding.",
+  "icon": "mdi:bicycle",
+  "mode": "single",
+  "sequence": [
+    {
+      "variables": {
+        "start_epoch": "{{ as_timestamp(now()) }}",
+        "before": {
+          "status_read_failed": true
+        }
+      }
+    },
+    {
+      "action": "persistent_notification.dismiss",
+      "data": {
+        "notification_id": "ftms_bike_ready"
+      }
+    },
+    {
+      "action": "ftms.get_status",
+      "data": {
+        "config_entry_id": "REPLACE_WITH_FTMS_CONFIG_ENTRY_ID"
+      },
+      "response_variable": "before",
+      "continue_on_error": true
+    },
+    {
+      "if": [
+        {
+          "condition": "template",
+          "value_template": "{{ before.status_read_failed | default(false) or before.recording_ready is not defined or before.last_activity_ts is not defined }}"
+        }
+      ],
+      "then": [
+        {
+          "action": "persistent_notification.create",
+          "data": {
+            "notification_id": "ftms_start_ride",
+            "title": "Bike status unavailable",
+            "message": "The bike and recorder status could not be checked. Check FTMS diagnostics before starting; recovery was not attempted."
+          }
+        },
+        {
+          "stop": "Bike status must be known before power recovery.",
+          "error": true
+        }
+      ]
+    },
+    {
+      "if": [
+        {
+          "condition": "template",
+          "value_template": "{{ before.recording_ready | default(false) }}"
+        }
+      ],
+      "then": [
+        {
+          "action": "persistent_notification.create",
+          "data": {
+            "notification_id": "ftms_bike_ready",
+            "title": "Bike ready",
+            "message": "Checked {{ now().strftime('%H:%M:%S') }}: fresh bike data is being recorded. This notice clears when recording becomes unavailable."
+          }
+        },
+        {
+          "action": "persistent_notification.dismiss",
+          "data": {
+            "notification_id": "ftms_start_ride"
+          }
+        },
+        {
+          "stop": "Bike is already recording fresh telemetry."
+        }
+      ]
+    },
+    {
+      "if": [
+        {
+          "condition": "template",
+          "value_template": "{{ before.connected | default(false) and before.fresh | default(false) }}"
+        }
+      ],
+      "then": [
+        {
+          "action": "persistent_notification.create",
+          "data": {
+            "notification_id": "ftms_start_ride",
+            "title": "Bike recorder needs attention",
+            "message": "The bike connection is fresh but the recorder is unhealthy ({{ before.storage_error | default('unknown storage error') }}). No power cycle was attempted."
+          }
+        },
+        {
+          "stop": "Fresh telemetry with an unhealthy recorder needs diagnosis first.",
+          "error": true
+        }
+      ]
+    },
+    {
+      "if": [
+        {
+          "condition": "template",
+          "value_template": "{{ before.last_activity_ts is not none and\n   (as_timestamp(now()) - (before.last_activity_ts | float(0))) < 180 }}"
+        }
+      ],
+      "then": [
+        {
+          "action": "persistent_notification.create",
+          "data": {
+            "notification_id": "ftms_start_ride",
+            "title": "Bike recovery skipped",
+            "message": "Recent pedalling was observed. Check the bike before using Start Ride again."
+          }
+        },
+        {
+          "stop": "Recent activity makes a power cycle unsafe.",
+          "error": true
+        }
+      ]
+    },
+    {
+      "if": [
+        {
+          "condition": "template",
+          "value_template": "{{ states('switch.smart_plug_5_socket_1') in ['unknown', 'unavailable'] }}"
+        }
+      ],
+      "then": [
+        {
+          "action": "persistent_notification.create",
+          "data": {
+            "notification_id": "ftms_start_ride",
+            "title": "Bike recovery unavailable",
+            "message": "Smart Plug 5 is unavailable. No power-cycle was attempted."
+          }
+        },
+        {
+          "stop": "Smart Plug 5 is unavailable.",
+          "error": true
+        }
+      ]
+    },
+    {
+      "action": "persistent_notification.create",
+      "data": {
+        "notification_id": "ftms_start_ride",
+        "title": "Connecting the bike",
+        "message": "Trying one pre-ride recovery. Please wait for Bike ready before pedalling; allow up to two minutes."
+      }
+    },
+    {
+      "action": "switch.turn_off",
+      "target": {
+        "entity_id": "switch.smart_plug_5_socket_1"
+      },
+      "continue_on_error": true
+    },
+    {
+      "wait_template": "{{ is_state('switch.smart_plug_5_socket_1', 'off') }}",
+      "timeout": {
+        "seconds": 10
+      },
+      "continue_on_timeout": true
+    },
+    {
+      "delay": {
+        "seconds": 8
+      }
+    },
+    {
+      "action": "switch.turn_on",
+      "target": {
+        "entity_id": "switch.smart_plug_5_socket_1"
+      },
+      "continue_on_error": true
+    },
+    {
+      "wait_template": "{{ is_state('switch.smart_plug_5_socket_1', 'on') }}",
+      "timeout": {
+        "seconds": 15
+      },
+      "continue_on_timeout": true
+    },
+    {
+      "if": [
+        {
+          "condition": "template",
+          "value_template": "{{ not is_state('switch.smart_plug_5_socket_1', 'on') }}"
+        }
+      ],
+      "then": [
+        {
+          "action": "persistent_notification.create",
+          "data": {
+            "notification_id": "ftms_start_ride",
+            "title": "Bike power recovery failed",
+            "message": "Smart Plug 5 did not report on. Check the plug and bike power before riding."
+          }
+        },
+        {
+          "stop": "Smart Plug 5 did not restore bike power.",
+          "error": true
+        }
+      ]
+    },
+    {
+      "delay": {
+        "seconds": 5
+      }
+    },
+    {
+      "action": "homeassistant.reload_config_entry",
+      "data": {
+        "entry_id": "REPLACE_WITH_FTMS_CONFIG_ENTRY_ID"
+      }
+    },
+    {
+      "wait_template": "{{ state_attr('sensor.kettler_ftms_telemetry_status', 'recording_ready') == true\n   and state_attr('sensor.kettler_ftms_telemetry_status', 'last_received_ts') is not none\n   and (state_attr('sensor.kettler_ftms_telemetry_status', 'last_received_ts') | float(0)) > (start_epoch | float(0)) }}",
+      "timeout": {
+        "seconds": 90
+      },
+      "continue_on_timeout": true
+    },
+    {
+      "variables": {
+        "after": {
+          "status_read_failed": true
+        }
+      }
+    },
+    {
+      "action": "ftms.get_status",
+      "data": {
+        "config_entry_id": "REPLACE_WITH_FTMS_CONFIG_ENTRY_ID"
+      },
+      "response_variable": "after",
+      "continue_on_error": true
+    },
+    {
+      "if": [
+        {
+          "condition": "template",
+          "value_template": "{{ after.recording_ready | default(false)\n   and after.last_received_ts is not none\n   and (after.last_received_ts | float(0)) > (start_epoch | float(0)) }}"
+        }
+      ],
+      "then": [
+        {
+          "action": "persistent_notification.create",
+          "data": {
+            "notification_id": "ftms_bike_ready",
+            "title": "Bike ready",
+            "message": "Checked {{ now().strftime('%H:%M:%S') }}: fresh bike data is being recorded. This notice clears when recording becomes unavailable."
+          }
+        },
+        {
+          "action": "persistent_notification.dismiss",
+          "data": {
+            "notification_id": "ftms_start_ride"
+          }
+        }
+      ],
+      "else": [
+        {
+          "action": "persistent_notification.create",
+          "data": {
+            "notification_id": "ftms_start_ride",
+            "title": "Bike connection failed",
+            "message": "No fresh, persisted FTMS measurement arrived within 90 seconds. Bike power is on. Wake the console and check the Bluetooth adapter and integration status."
+          }
+        },
+        {
+          "stop": "No fresh FTMS telemetry arrived before the deadline.",
+          "error": true
+        }
+      ]
+    }
+  ]
+}

@@ -13,6 +13,19 @@ capabilities of version 0.24.8.dev2.
 
 ## Verified baseline (2026-10-17)
 
+Current follow-up (2026-10-18): 53 local tests pass under the existing project
+Python environment. Dev4 adds offline session/count/metric-name recovery and
+checks that a persisted onset event survives replay while disconnect alone
+cannot invent a completed workout. The existing private journal replays and has
+a completed summary but no durable onset event; a null `latest_event` is correct
+for that older data. These checks do not establish real-bike onset delivery or
+coaching receipt. A separate template diagnostic entity exposes status through
+ordinary entity reads outside the FTMS entry lifecycle.
+Dev5's added fault-injection test first reproduced an onset event being emitted
+after its sample write failed. The corrected writer suppresses that event,
+retains a suppression marker and storage fault, and keeps later samples marked
+with the storage gap. HA's real disk was not deliberately faulted.
+
 - [x] HA Core 2026.10.1 / HAOS 18.3 / Pi 4 / Python 3.14.6; HACS 2.0.5.
 - [x] Local bcm43438-bt UART adapter; no active proxy scanner in HA diagnostics.
 - [x] Initially Bluetooth entry disabled, no installed FTMS component or entry.
@@ -32,6 +45,20 @@ capabilities of version 0.24.8.dev2.
 - [x] Initial HA config check passed after installation.
 
 ## Live acceptance to record
+
+- [x] Explicit Start Ride recovery on dev4: first persisted idle sample 17.45
+      seconds after invocation; script completed and displayed Bike ready.
+      No activity event was generated. Private run evidence is saved locally.
+- [x] Invoke Start Ride again while already ready: script completed immediately,
+      reported existing fresh recording and left the plug's last-change timestamp
+      unchanged. This verifies the no-reset path for an idle connected bike.
+- [x] Controlled status-read failure probe: the real read action rejected an
+      unknown entry; the production guard produced its expected error path and
+      stopped. The isolated probe contained no hardware actions; plug state and
+      journal bytes were unchanged, and the temporary script/notice were removed.
+      This does not prove a real failed Bluetooth recovery or storage fault.
+- [ ] Start Ride refuses recovery during a real recent ride or storage fault.
+- [ ] Start Ride reports a real recovery failure clearly; no repeated cycling.
 
 - [x] FTMS entry connects and GATT feature reads succeed on HA Python 3.14.6,
       including dev3 with real moving-bike telemetry.
@@ -85,3 +112,11 @@ is pending; the installed action is experimental and reports this failure.
 
 Not a prerequisite for Coach Basil launch. Reward ledger integration and any
 private data-package handoff require separate verification and applicable consent.
+
+
+Publisher dev6 acceptance: 106 source tests pass, HA restart loaded armed, durable
+Pi-side queue cursor readback retains activation, no old event queued. HA-side
+test_ping accepted/woke and subsequent same-identity receipt lookup confirms
+completed/skipped/terminal with no second POST. This proves synthetic transport
+and correlated receipt consumption; next genuine workout must still prove
+automatic onset-to-private coaching response.
